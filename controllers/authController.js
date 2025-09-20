@@ -1,0 +1,71 @@
+import { comparePassword, hashPassword } from "../lib/hash"
+import { getSession, createSession, destroySession } from "../lib/auth"
+import { loginSchema, registerSchema } from "../lib/validators"
+import { findUserByEmail, createUser } from "../models/userModel"
+import { getOrCreateCsrfToken, validateCsrf } from "../lib/csrf"
+import { NextResponse } from "next/server"
+
+export async function csrf() {
+  const token = await getOrCreateCsrfToken()
+  return NextResponse.json({ csrfToken: token })
+}
+
+export async function getMe() {
+  const session = await getSession()
+  if (!session) {
+    return NextResponse.json({ user: null }, { status: 200 })
+  }
+  return NextResponse.json({ user: session.user }, { status: 200 })
+}
+
+export async function register(request) {
+  const body = await request.json().catch(() => ({}))
+  const parsed = registerSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid input", details: parsed.error.flatten() }, { status: 400 })
+  }
+  const { email, password, name } = parsed.data
+  const existing = await findUserByEmail(email)
+  if (existing) {
+    return NextResponse.json({ error: "Email already registered" }, { status: 409 })
+  }
+  const password_hash = await hashPassword(password)
+  // Default role is 'user'; seeds will create admin
+  const user = await createUser({ email, password_hash, name, role: "user" })
+  await createSession(user.id)
+  // Ensure CSRF token is set for client
+  await getOrCreateCsrfToken()
+  return NextResponse.json(
+    { user: { id: user.id, email: user.email, name: user.name, role: user.role } },
+    { status: 201 },
+  )
+}
+
+export async function login(request) {
+  const body = await request.json().catch(() => ({}))
+  const parsed = loginSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid input" }, { status: 400 })
+  }
+  const { email, password } = parsed.data
+  const user = await findUserByEmail(email)
+  if (!user) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+  }
+  const ok = await comparePassword(password, user.password_hash)
+  if (!ok) {
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+  }
+  await createSession(user.id)
+  await getOrCreateCsrfToken()
+  return NextResponse.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+}
+
+export async function logout(request) {
+  // require CSRF for logout to prevent CSRF logouts
+  if (!(await validateCsrf(request.headers))) {
+    return NextResponse.json({ error: "Invalid CSRF token" }, { status: 403 })
+  }
+  await destroySession()
+  return NextResponse.json({ ok: true })
+}

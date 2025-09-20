@@ -1,0 +1,2 @@
+-- Optional demo data (non-admins) for local tests; seeding script inserts these as well conditionally.
+-- Keeping this file intentionally blank to avoid duplications via seed.js.
