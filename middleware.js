@@ -3,13 +3,17 @@ import { NextResponse } from 'next/server'
 export async function middleware(request) {
   const pathname = request.nextUrl.pathname
   
-  // Allow public routes
+  // Allow public routes (website pages that don't require authentication)
   if (pathname.startsWith('/login') || 
       pathname.startsWith('/register') || 
       pathname.startsWith('/api') ||
       pathname.startsWith('/_next') ||
       pathname.startsWith('/favicon') ||
-      pathname === '/') {
+      pathname === '/' ||
+      pathname === '/shop' ||
+      pathname === '/contact' ||
+      pathname === '/simple-shop' ||
+      pathname === '/test-shop') {
     return NextResponse.next()
   }
 
