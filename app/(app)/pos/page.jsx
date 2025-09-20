@@ -8,6 +8,9 @@ import ProductInput from '@/components/pos/ProductInput'
 import Cart from '@/components/pos/Cart'
 import Receipt from '@/components/pos/Receipt'
 import { Button } from '@/components/ui/button'
+import { ConnectionStatusBadge } from '@/components/connection-status'
+import offlineProductModel from '@/models/offlineProductModel'
+import offlineSalesModel from '@/models/offlineSalesModel'
 
 export default function POSSystem() {
   const [cart, setCart] = useState([])
@@ -87,10 +90,20 @@ export default function POSSystem() {
 
   const loadProducts = async () => {
     try {
-      const response = await fetch('/api/products?limit=100&is_active=true')
-      if (response.ok) {
-        const data = await response.json()
-        setProducts(data.products || [])
+      // Try offline first, then fallback to API if online
+      const offlineResult = await offlineProductModel.findAll({ limit: 100 });
+      
+      if (offlineResult.success && offlineResult.products.length > 0) {
+        // Filter active products
+        const activeProducts = offlineResult.products.filter(p => p.is_active !== false);
+        setProducts(activeProducts);
+      } else {
+        // Fallback to API if no offline data
+        const response = await fetch('/api/products?limit=100&is_active=true');
+        if (response.ok) {
+          const data = await response.json();
+          setProducts(data.products || []);
+        }
       }
     } catch (error) {
       toast({
@@ -327,32 +340,59 @@ export default function POSSystem() {
           original_price: item.originalPrice,
           discount_percentage: item.discount,
           discount_amount: (item.originalPrice - item.unitPrice) * item.quantity,
-          total_amount: item.total
+          total_amount: item.total,
+          buying_price: item.buying_price || 0 // Include buying price for profit calculation
         })),
         subtotal,
         tax,
-        total
+        total_amount: total,
+        payment_method: 'cash', // Default to cash, can be updated based on UI
+        cashier_id: session?.user?.id,
+        cashier_name: session?.user?.name
       }
 
-      const response = await fetch('/api/sales', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(saleData)
-      })
-
-      if (response.ok) {
-        setShowBill(true)
+      // Try offline storage first
+      const offlineResult = await offlineSalesModel.createSale(saleData);
+      
+      if (offlineResult.success) {
+        // Update local product stock
+        const stockUpdates = cart.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+          operation: 'subtract'
+        }));
+        
+        await offlineProductModel.bulkUpdateStock(stockUpdates);
+        
+        setShowBill(true);
         toast({
           title: "Sale completed",
-          description: "Transaction processed successfully"
-        })
-        // Reload products to update stock
-        loadProducts()
+          description: "Transaction saved locally and will sync when online"
+        });
+        
+        // Reload products to show updated stock
+        loadProducts();
       } else {
-        const error = await response.json()
-        throw new Error(error.message || 'Failed to process sale')
+        // Fallback to API if offline storage fails
+        const response = await fetch('/api/sales', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(saleData)
+        });
+
+        if (response.ok) {
+          setShowBill(true);
+          toast({
+            title: "Sale completed",
+            description: "Transaction processed successfully"
+          });
+          loadProducts();
+        } else {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to process sale');
+        }
       }
     } catch (error) {
       toast({
@@ -420,6 +460,9 @@ export default function POSSystem() {
           </h1>
           
           <div className="flex items-center gap-4">
+            {/* Connection Status */}
+            <ConnectionStatusBadge />
+            
             {/* Session Timer for Cashiers */}
             {isCashier && (
               <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-lg border border-blue-200 dark:border-blue-800">
