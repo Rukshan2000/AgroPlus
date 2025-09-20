@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, Trash2, Plus, Search } from "lucide-react"
+import { Pencil, Trash2, Plus, Search, QrCode } from "lucide-react"
 import AddProductModal from "./add-product-modal"
 import DeleteProductModal from "./delete-product-modal"
+import BarcodeSticker from "./barcode-sticker"
+import BulkBarcodeSticker from "./bulk-barcode-sticker"
 
 export default function ProductsTable({ initialProducts = [], initialCategories = [] }) {
   const [products, setProducts] = useState(initialProducts)
@@ -22,6 +24,8 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [barcodeModalOpen, setBarcodeModalOpen] = useState(false)
+  const [bulkBarcodeModalOpen, setBulkBarcodeModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
 
   const filteredProducts = products.filter(product => {
@@ -82,6 +86,15 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
     setDeleteModalOpen(true)
   }
 
+  const handleBarcodeSticker = (product) => {
+    setSelectedProduct(product)
+    setBarcodeModalOpen(true)
+  }
+
+  const handleBulkBarcodeSticker = () => {
+    setBulkBarcodeModalOpen(true)
+  }
+
   const handleProductSuccess = (product, action) => {
     if (action === 'created') {
       setProducts(prev => [product, ...prev])
@@ -109,10 +122,16 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Products</CardTitle>
-        <Button onClick={handleAddProduct}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Product
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleBulkBarcodeSticker}>
+            <QrCode className="h-4 w-4 mr-2" />
+            Bulk Barcodes
+          </Button>
+          <Button onClick={handleAddProduct}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Product
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {/* Filters */}
@@ -153,7 +172,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
 
         {/* Products Table */}
         <div className="grid gap-2">
-          <div className="grid grid-cols-8 text-xs font-medium text-muted-foreground">
+          <div className="grid grid-cols-9 text-xs font-medium text-muted-foreground">
             <div>Name</div>
             <div>SKU</div>
             <div>Category</div>
@@ -162,6 +181,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             <div>Status</div>
             <div>Created</div>
             <div>Actions</div>
+            <div></div>
           </div>
           {filteredProducts.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
@@ -169,7 +189,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             </div>
           ) : (
             filteredProducts.map((product) => (
-              <div key={product.id} className="grid grid-cols-8 items-center py-3 border-b last:border-b-0">
+              <div key={product.id} className="grid grid-cols-9 items-center py-3 border-b last:border-b-0">
                 <div>
                   <div className="font-medium">{product.name}</div>
                   {product.description && (
@@ -216,6 +236,16 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
+                <div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleBarcodeSticker(product)}
+                    title="Generate Barcode Sticker"
+                  >
+                    <QrCode className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
             ))
           )}
@@ -245,6 +275,20 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
         onClose={() => setDeleteModalOpen(false)}
         onSuccess={handleDeleteSuccess}
         product={selectedProduct}
+      />
+
+      {/* Barcode Sticker Modal */}
+      <BarcodeSticker
+        isOpen={barcodeModalOpen}
+        onClose={() => setBarcodeModalOpen(false)}
+        product={selectedProduct}
+      />
+
+      {/* Bulk Barcode Sticker Modal */}
+      <BulkBarcodeSticker
+        isOpen={bulkBarcodeModalOpen}
+        onClose={() => setBulkBarcodeModalOpen(false)}
+        products={filteredProducts}
       />
     </Card>
   )

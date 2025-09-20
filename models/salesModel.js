@@ -11,16 +11,27 @@ export async function createSale({
   total_amount,
   created_by
 }) {
+  // Get the product's buying price for profit calculation
+  const productResult = await query('SELECT buying_price, selling_price FROM products WHERE id = $1', [product_id]);
+  const product = productResult.rows[0];
+  
+  const buying_price_at_sale = product ? product.buying_price : 0;
+  const profit_per_unit = unit_price - buying_price_at_sale;
+  const total_profit = profit_per_unit * quantity;
+  const profit_margin_percentage = unit_price > 0 ? ((profit_per_unit / unit_price) * 100) : 0;
+
   const result = await query(`
     INSERT INTO sales (
       product_id, product_name, quantity, unit_price, original_price, 
-      discount_percentage, discount_amount, total_amount, created_by
+      discount_percentage, discount_amount, total_amount, created_by,
+      buying_price_at_sale, profit_per_unit, total_profit, profit_margin_percentage
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING *
   `, [
     product_id, product_name, quantity, unit_price, original_price,
-    discount_percentage, discount_amount, total_amount, created_by
+    discount_percentage, discount_amount, total_amount, created_by,
+    buying_price_at_sale, profit_per_unit, total_profit, profit_margin_percentage
   ])
   return result.rows[0]
 }
@@ -93,8 +104,11 @@ export async function getSalesStats() {
     SELECT 
       COUNT(*) as total_sales,
       SUM(total_amount) as total_revenue,
+      SUM(total_profit) as total_profit,
       SUM(quantity) as total_items_sold,
-      AVG(total_amount) as average_sale_amount
+      AVG(total_amount) as average_sale_amount,
+      AVG(profit_margin_percentage) as average_profit_margin,
+      SUM(total_amount) - SUM(total_profit) as total_cost
     FROM sales
   `)
   return result.rows[0]
@@ -106,11 +120,70 @@ export async function getDailySalesStats(days = 30) {
       DATE(sale_date) as sale_date,
       COUNT(*) as sales_count,
       SUM(total_amount) as daily_revenue,
-      SUM(quantity) as items_sold
+      SUM(total_profit) as daily_profit,
+      SUM(quantity) as items_sold,
+      AVG(profit_margin_percentage) as avg_profit_margin,
+      SUM(total_amount) - SUM(total_profit) as daily_cost
     FROM sales
-    WHERE sale_date >= NOW() - INTERVAL '${days} days'
+    WHERE sale_date >= CURRENT_DATE - INTERVAL '30 days'
     GROUP BY DATE(sale_date)
     ORDER BY sale_date DESC
+  `)
+  return result.rows
+}
+
+export async function getHourlySalesPattern() {
+  const result = await query(`
+    SELECT 
+      EXTRACT(HOUR FROM sale_date) as hour,
+      COUNT(*) as sales_count,
+      SUM(total_amount) as revenue,
+      SUM(total_profit) as profit,
+      AVG(total_amount) as avg_sale_amount,
+      AVG(profit_margin_percentage) as avg_profit_margin
+    FROM sales
+    WHERE sale_date >= CURRENT_DATE - INTERVAL '30 days'
+    GROUP BY EXTRACT(HOUR FROM sale_date)
+    ORDER BY hour
+  `)
+  return result.rows
+}
+
+export async function getMonthlyTrends() {
+  const result = await query(`
+    SELECT 
+      DATE_TRUNC('month', sale_date) as month,
+      COUNT(*) as sales_count,
+      SUM(total_amount) as revenue,
+      SUM(total_profit) as profit,
+      SUM(quantity) as items_sold,
+      COUNT(DISTINCT created_by) as active_cashiers,
+      AVG(profit_margin_percentage) as avg_profit_margin,
+      SUM(total_amount) - SUM(total_profit) as total_cost
+    FROM sales
+    WHERE sale_date >= CURRENT_DATE - INTERVAL '12 months'
+    GROUP BY DATE_TRUNC('month', sale_date)
+    ORDER BY month DESC
+  `)
+  return result.rows
+}
+
+export async function getLowStockAlerts() {
+  const result = await query(`
+    SELECT 
+      p.id,
+      p.name,
+      p.sku,
+      p.category,
+      p.available_quantity,
+      p.minimum_quantity,
+      COALESCE(SUM(s.quantity), 0) as total_sold,
+      COUNT(s.id) as sales_count
+    FROM products p
+    LEFT JOIN sales s ON p.id = s.product_id AND s.sale_date >= CURRENT_DATE - INTERVAL '30 days'
+    WHERE p.available_quantity <= COALESCE(p.minimum_quantity, 5) OR p.available_quantity <= 5
+    GROUP BY p.id, p.name, p.sku, p.category, p.available_quantity, p.minimum_quantity
+    ORDER BY p.available_quantity ASC
   `)
   return result.rows
 }
@@ -122,14 +195,135 @@ export async function getTopSellingProducts(limit = 10) {
       p.name,
       p.sku,
       p.category,
+      p.buying_price,
+      p.selling_price,
       SUM(s.quantity) as total_quantity_sold,
       SUM(s.total_amount) as total_revenue,
-      COUNT(s.id) as sales_count
+      SUM(s.total_profit) as total_profit,
+      COUNT(s.id) as sales_count,
+      AVG(s.profit_margin_percentage) as avg_profit_margin
     FROM sales s
     JOIN products p ON s.product_id = p.id
-    GROUP BY p.id, p.name, p.sku, p.category
+    GROUP BY p.id, p.name, p.sku, p.category, p.buying_price, p.selling_price
     ORDER BY total_quantity_sold DESC
     LIMIT $1
   `, [limit])
+  return result.rows
+}
+
+export async function getCategorySalesStats() {
+  const result = await query(`
+    SELECT 
+      p.category,
+      COUNT(s.id) as sales_count,
+      SUM(s.quantity) as total_quantity,
+      SUM(s.total_amount) as total_revenue,
+      SUM(s.total_profit) as total_profit,
+      AVG(s.total_amount) as avg_sale_amount,
+      AVG(s.profit_margin_percentage) as avg_profit_margin,
+      SUM(s.total_amount) - SUM(s.total_profit) as total_cost
+    FROM sales s
+    JOIN products p ON s.product_id = p.id
+    WHERE p.category IS NOT NULL
+    GROUP BY p.category
+    ORDER BY total_revenue DESC
+  `)
+  return result.rows
+}
+
+export async function getCashierPerformance() {
+  const result = await query(`
+    SELECT 
+      u.id,
+      u.name,
+      u.username,
+      COUNT(s.id) as total_sales,
+      SUM(s.quantity) as items_sold,
+      SUM(s.total_amount) as total_revenue,
+      SUM(s.total_profit) as total_profit,
+      AVG(s.total_amount) as avg_sale_amount,
+      AVG(s.profit_margin_percentage) as avg_profit_margin,
+      DATE(MIN(s.sale_date)) as first_sale_date,
+      DATE(MAX(s.sale_date)) as last_sale_date
+    FROM sales s
+    JOIN users u ON s.created_by = u.id
+    GROUP BY u.id, u.name, u.username
+    ORDER BY total_revenue DESC
+  `)
+  return result.rows
+}
+
+// New profit analysis functions
+export async function getProfitAnalysis(days = 30) {
+  const result = await query(`
+    SELECT 
+      DATE(sale_date) as date,
+      SUM(total_amount) as revenue,
+      SUM(total_profit) as profit,
+      SUM(total_amount) - SUM(total_profit) as cost,
+      AVG(profit_margin_percentage) as avg_profit_margin,
+      COUNT(*) as transactions
+    FROM sales
+    WHERE sale_date >= CURRENT_DATE - INTERVAL '${days} days'
+    GROUP BY DATE(sale_date)
+    ORDER BY date DESC
+  `)
+  return result.rows
+}
+
+export async function getTopProfitableProducts(limit = 10) {
+  const result = await query(`
+    SELECT 
+      p.id,
+      p.name,
+      p.sku,
+      p.category,
+      p.buying_price,
+      p.selling_price,
+      SUM(s.total_profit) as total_profit,
+      SUM(s.total_amount) as total_revenue,
+      AVG(s.profit_margin_percentage) as avg_profit_margin,
+      SUM(s.quantity) as total_quantity_sold
+    FROM sales s
+    JOIN products p ON s.product_id = p.id
+    GROUP BY p.id, p.name, p.sku, p.category, p.buying_price, p.selling_price
+    ORDER BY total_profit DESC
+    LIMIT $1
+  `, [limit])
+  return result.rows
+}
+
+export async function getMostProfitableCategories() {
+  const result = await query(`
+    SELECT 
+      p.category,
+      SUM(s.total_profit) as total_profit,
+      SUM(s.total_amount) as total_revenue,
+      AVG(s.profit_margin_percentage) as avg_profit_margin,
+      COUNT(s.id) as total_sales,
+      SUM(s.quantity) as total_items_sold
+    FROM sales s
+    JOIN products p ON s.product_id = p.id
+    WHERE p.category IS NOT NULL
+    GROUP BY p.category
+    ORDER BY total_profit DESC
+  `)
+  return result.rows
+}
+
+export async function getProfitTrends(months = 12) {
+  const result = await query(`
+    SELECT 
+      DATE_TRUNC('month', sale_date) as month,
+      SUM(total_amount) as revenue,
+      SUM(total_profit) as profit,
+      SUM(total_amount) - SUM(total_profit) as cost,
+      AVG(profit_margin_percentage) as avg_profit_margin,
+      COUNT(*) as transactions
+    FROM sales
+    WHERE sale_date >= CURRENT_DATE - INTERVAL '${months} months'
+    GROUP BY DATE_TRUNC('month', sale_date)
+    ORDER BY month DESC
+  `)
   return result.rows
 }

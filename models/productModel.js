@@ -17,6 +17,8 @@ export async function createProduct({
   name, 
   description, 
   price, 
+  buying_price = 0.00,
+  selling_price,
   sku, 
   category, 
   stock_quantity = 0, 
@@ -26,11 +28,14 @@ export async function createProduct({
   unit_type = 'kg',
   unit_value = 1.000
 }) {
+  // Use selling_price if provided, otherwise fall back to price for backward compatibility
+  const finalSellingPrice = selling_price || price || 0.00;
+  
   const result = await query(`
-    INSERT INTO products (name, description, price, sku, category, stock_quantity, is_active, image_url, created_by, unit_type, unit_value)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    INSERT INTO products (name, description, price, buying_price, selling_price, sku, category, stock_quantity, is_active, image_url, created_by, unit_type, unit_value)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING *
-  `, [name, description, price, sku, category, stock_quantity, is_active, image_url, created_by, unit_type, unit_value])
+  `, [name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, stock_quantity, is_active, image_url, created_by, unit_type, unit_value])
   return result.rows[0]
 }
 
@@ -90,6 +95,8 @@ export async function updateProduct(id, {
   name, 
   description, 
   price, 
+  buying_price,
+  selling_price,
   sku, 
   category, 
   stock_quantity, 
@@ -98,22 +105,27 @@ export async function updateProduct(id, {
   unit_type,
   unit_value
 }) {
+  // Use selling_price if provided, otherwise fall back to price for backward compatibility
+  const finalSellingPrice = selling_price || price;
+  
   const result = await query(`
     UPDATE products SET 
       name = $1, 
       description = $2, 
       price = $3, 
-      sku = $4, 
-      category = $5, 
-      stock_quantity = $6, 
-      is_active = $7, 
-      image_url = $8,
-      unit_type = $9,
-      unit_value = $10,
+      buying_price = $4,
+      selling_price = $5,
+      sku = $6, 
+      category = $7, 
+      stock_quantity = $8, 
+      is_active = $9, 
+      image_url = $10,
+      unit_type = $11,
+      unit_value = $12,
       updated_at = NOW()
-    WHERE id = $11
+    WHERE id = $13
     RETURNING *
-  `, [name, description, price, sku, category, stock_quantity, is_active, image_url, unit_type, unit_value, id])
+  `, [name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, stock_quantity, is_active, image_url, unit_type, unit_value, id])
   return result.rows[0] || null
 }
 

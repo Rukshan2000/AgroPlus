@@ -1,8 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3, Clock, DollarSign } from "lucide-react"
+import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3, Clock, DollarSign, ChevronDown, ChevronRight } from "lucide-react"
 
 import {
   Sidebar as UiSidebar,
@@ -18,7 +19,19 @@ import {
   SidebarProvider,
   SidebarTrigger,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
+
+function SidebarHeaderContent() {
+  const { state } = useSidebar()
+  const isCollapsed = state === "collapsed"
+  
+  return (
+    <div className="px-2 py-1 text-sm font-semibold">
+      {isCollapsed ? "A" : "Agro Plus"}
+    </div>
+  )
+}
 
 export function AppSidebarWrapper({ children, session }) {
   const userRole = session?.user?.role;
@@ -36,7 +49,7 @@ export function AppSidebarWrapper({ children, session }) {
     <SidebarProvider>
       <UiSidebar collapsible="icon">
         <SidebarHeader>
-          <div className="px-2 py-1 text-sm font-semibold">RBAC Demo</div>
+          <SidebarHeaderContent />
         </SidebarHeader>
         <SidebarContent>
           <NavMenu role={session?.user?.role} />
@@ -89,35 +102,144 @@ export function AppSidebarWrapper({ children, session }) {
 
 function NavMenu({ role }) {
   const pathname = usePathname()
-  const items = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "user"] },
-    { href: "/pos", label: "POS System", icon: ShoppingCart, roles: ["admin", "manager", "user", "cashier"] },
-    { href: "/sales", label: "Sales History", icon: BarChart3, roles: ["admin", "manager", "user"] },
-    { href: "/products", label: "Products", icon: Package, roles: ["admin", "manager", "user"] },
-    { href: "/categories", label: "Categories", icon: Tag, roles: ["admin", "manager", "user"] },
-    { href: "/hr", label: "HR Dashboard", icon: Clock, roles: ["admin", "manager"] },
-    { href: "/hr/payroll", label: "Payroll", icon: DollarSign, roles: ["admin", "manager"] },
-    { href: "/users", label: "Users", icon: Users, roles: ["admin", "manager"] },
-    { href: "/settings", label: "Settings", icon: Settings, roles: ["admin", "manager", "user"] },
-    { href: "/", label: "Home", icon: Home, roles: ["admin", "manager", "user"] },
+  const { state } = useSidebar()
+  const [openMenus, setOpenMenus] = useState({})
+
+  const isCollapsed = state === "collapsed"
+
+  const toggleMenu = (menuKey) => {
+    if (isCollapsed) return // Don't toggle when collapsed
+    setOpenMenus(prev => ({
+      ...prev,
+      [menuKey]: !prev[menuKey]
+    }))
+  }
+
+  const menuGroups = [
+    {
+      key: "main",
+      label: "Main",
+      items: [
+        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "user"] },
+        { href: "/", label: "Home", icon: Home, roles: ["admin", "manager", "user"] },
+      ]
+    },
+    {
+      key: "sales",
+      label: "Sales & POS",
+      icon: ShoppingCart,
+      collapsible: true,
+      items: [
+        { href: "/pos", label: "POS System", icon: ShoppingCart, roles: ["admin", "manager", "user", "cashier"] },
+        { href: "/sales", label: "Sales History", icon: BarChart3, roles: ["admin", "manager", "user"] },
+      ]
+    },
+    {
+      key: "inventory",
+      label: "Inventory",
+      icon: Package,
+      collapsible: true,
+      items: [
+        { href: "/products", label: "Products", icon: Package, roles: ["admin", "manager", "user"] },
+        { href: "/categories", label: "Categories", icon: Tag, roles: ["admin", "manager", "user"] },
+      ]
+    },
+    {
+      key: "hr",
+      label: "Human Resources",
+      icon: Clock,
+      collapsible: true,
+      items: [
+        { href: "/hr", label: "HR Dashboard", icon: Clock, roles: ["admin", "manager"] },
+        { href: "/hr/payroll", label: "Payroll", icon: DollarSign, roles: ["admin", "manager"] },
+      ]
+    },
+    {
+      key: "admin",
+      label: "Administration",
+      icon: Settings,
+      collapsible: true,
+      items: [
+        { href: "/users", label: "Users", icon: Users, roles: ["admin", "manager"] },
+        { href: "/settings", label: "Settings", icon: Settings, roles: ["admin", "manager", "user"] },
+      ]
+    }
   ]
+
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Navigation</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {items
-            .filter((i) => !role || i.roles.includes(role))
-            .map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton asChild isActive={pathname === item.href}>
-                  <Link href={item.href}>
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+          {menuGroups.map((group) => {
+            const visibleItems = group.items.filter((item) => !role || item.roles.includes(role))
+            
+            if (visibleItems.length === 0) return null
+
+            if (group.collapsible) {
+              const isOpen = openMenus[group.key]
+              const hasActiveItem = visibleItems.some(item => pathname === item.href)
+              
+              // When collapsed, show items directly without grouping
+              if (isCollapsed) {
+                return visibleItems.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton asChild isActive={pathname === item.href}>
+                      <Link href={item.href}>
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))
+              }
+              
+              return (
+                <div key={group.key}>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton 
+                      onClick={() => toggleMenu(group.key)}
+                      className="flex items-center justify-between w-full"
+                      isActive={hasActiveItem}
+                    >
+                      <div className="flex items-center gap-2">
+                        <group.icon className="h-4 w-4" />
+                        <span>{group.label}</span>
+                      </div>
+                      {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  
+                  {(isOpen || hasActiveItem) && (
+                    <div className="ml-4 border-l border-muted-foreground/20 pl-4 space-y-1">
+                      {visibleItems.map((item) => (
+                        <SidebarMenuItem key={item.href}>
+                          <SidebarMenuButton asChild isActive={pathname === item.href} size="sm">
+                            <Link href={item.href}>
+                              <item.icon className="h-3 w-3" />
+                              <span className="text-sm">{item.label}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            } else {
+              // Non-collapsible items
+              return visibleItems.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton asChild isActive={pathname === item.href}>
+                    <Link href={item.href}>
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))
+            }
+          })}
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>

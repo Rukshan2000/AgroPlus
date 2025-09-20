@@ -45,7 +45,7 @@ export async function POST(request) {
           discount_percentage: item.discount_percentage || 0,
           discount_amount: item.discount_amount || 0,
           total_amount: item.total_amount,
-          created_by: session.id
+          created_by: session.user.id
         })
 
         sales.push(sale)

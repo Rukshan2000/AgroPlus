@@ -16,7 +16,9 @@ import { z } from "zod"
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required").max(255),
   description: z.string().optional(),
-  price: z.number().min(0, "Price must be positive"),
+  price: z.number().min(0, "Price must be positive").optional(), // Keep for backward compatibility
+  buying_price: z.number().min(0, "Buying price must be positive").default(0),
+  selling_price: z.number().min(0, "Selling price must be positive"),
   sku: z.string().optional(),
   category: z.string().optional(),
   stock_quantity: z.number().int().min(0, "Stock quantity must be non-negative").default(0),

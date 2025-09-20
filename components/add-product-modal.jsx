@@ -28,7 +28,9 @@ export default function AddProductModal({
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    price: "",
+    price: "", // Keep for backward compatibility
+    buying_price: "",
+    selling_price: "",
     sku: "",
     category: "",
     stock_quantity: "",
@@ -64,7 +66,9 @@ export default function AddProductModal({
         setFormData({
           name: product.name || "",
           description: product.description || "",
-          price: product.price?.toString() || "",
+          price: product.price?.toString() || product.selling_price?.toString() || "",
+          buying_price: product.buying_price?.toString() || "",
+          selling_price: product.selling_price?.toString() || product.price?.toString() || "",
           sku: product.sku || "",
           category: product.category || "",
           stock_quantity: product.stock_quantity?.toString() || "",
@@ -79,6 +83,8 @@ export default function AddProductModal({
           name: "",
           description: "",
           price: "",
+          buying_price: "",
+          selling_price: "",
           sku: "",
           category: "",
           stock_quantity: "",
@@ -106,8 +112,17 @@ export default function AddProductModal({
       newErrors.name = "Product name is required"
     }
 
-    if (!formData.price || isNaN(parseFloat(formData.price)) || parseFloat(formData.price) < 0) {
-      newErrors.price = "Valid price is required"
+    if (!formData.selling_price || isNaN(parseFloat(formData.selling_price)) || parseFloat(formData.selling_price) < 0) {
+      newErrors.selling_price = "Valid selling price is required"
+    }
+
+    if (formData.buying_price && (isNaN(parseFloat(formData.buying_price)) || parseFloat(formData.buying_price) < 0)) {
+      newErrors.buying_price = "Buying price must be a non-negative number"
+    }
+
+    if (formData.buying_price && formData.selling_price && 
+        parseFloat(formData.buying_price) > parseFloat(formData.selling_price)) {
+      newErrors.buying_price = "Buying price cannot be higher than selling price"
     }
 
     if (formData.stock_quantity && (isNaN(parseInt(formData.stock_quantity)) || parseInt(formData.stock_quantity) < 0)) {
@@ -145,7 +160,9 @@ export default function AddProductModal({
 
       const payload = {
         ...formData,
-        price: parseFloat(formData.price),
+        price: parseFloat(formData.selling_price), // For backward compatibility
+        buying_price: parseFloat(formData.buying_price) || 0,
+        selling_price: parseFloat(formData.selling_price),
         stock_quantity: parseInt(formData.stock_quantity) || 0,
         unit_value: parseFloat(formData.unit_value),
         image_url: formData.image_url.trim() || undefined
@@ -244,21 +261,41 @@ export default function AddProductModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="price">Price *</Label>
+              <Label htmlFor="buying_price">Buying Price (Cost)</Label>
               <Input
-                id="price"
+                id="buying_price"
                 type="number"
                 step="0.01"
                 min="0"
-                value={formData.price}
-                onChange={(e) => handleInputChange("price", e.target.value)}
+                value={formData.buying_price}
+                onChange={(e) => handleInputChange("buying_price", e.target.value)}
                 placeholder="0.00"
-                className={errors.price ? "border-destructive" : ""}
+                className={errors.buying_price ? "border-destructive" : ""}
               />
-              {errors.price && (
-                <p className="text-sm text-destructive">{errors.price}</p>
+              {errors.buying_price && (
+                <p className="text-sm text-destructive">{errors.buying_price}</p>
               )}
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="selling_price">Selling Price *</Label>
+              <Input
+                id="selling_price"
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.selling_price}
+                onChange={(e) => handleInputChange("selling_price", e.target.value)}
+                placeholder="0.00"
+                className={errors.selling_price ? "border-destructive" : ""}
+              />
+              {errors.selling_price && (
+                <p className="text-sm text-destructive">{errors.selling_price}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
 
             <div className="space-y-2">
               <Label htmlFor="stock_quantity">Stock Quantity</Label>

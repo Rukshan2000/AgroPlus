@@ -21,6 +21,7 @@ export default function POSSystem() {
   const [filteredProducts, setFilteredProducts] = useState([])
   const [sortBy, setSortBy] = useState('popularity') // New sorting state
   const [sortOrder, setSortOrder] = useState('desc') // New sort order state
+  const [sessionTime, setSessionTime] = useState(0) // Timer state
   const { toast } = useToast()
   const { session } = useSession()
 
@@ -45,6 +46,25 @@ export default function POSSystem() {
   useEffect(() => {
     loadProducts()
   }, [])
+
+  // Session timer effect
+  useEffect(() => {
+    if (session?.user) {
+      const timer = setInterval(() => {
+        setSessionTime(prev => prev + 1)
+      }, 1000)
+
+      return () => clearInterval(timer)
+    }
+  }, [session?.user])
+
+  // Format session time
+  const formatSessionTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const secs = seconds % 60
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
 
   // Filter and sort products based on search and sorting options
   useEffect(() => {
@@ -390,9 +410,9 @@ export default function POSSystem() {
   const isCashier = session?.user?.role === 'cashier'
   
   return (
-    <div className={isCashier ? "fixed inset-0 bg-gray-50 dark:bg-gray-900 z-50 overflow-auto" : "min-h-screen bg-gray-50 dark:bg-gray-900"}>
+    <div className={isCashier ? "fixed inset-0 bg-gray-50 dark:bg-black z-50 overflow-auto" : "min-h-screen bg-gray-50 dark:bg-black"}>
       {/* Compact Header */}
-      <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 shadow-sm">
+      <div className="bg-white dark:bg-black border-b dark:border-gray-800 shadow-sm">
         <div className="px-4 py-2 flex justify-between items-center">
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-blue-400" />
@@ -400,13 +420,28 @@ export default function POSSystem() {
           </h1>
           
           <div className="flex items-center gap-4">
+            {/* Session Timer for Cashiers */}
+            {isCashier && (
+              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <div className="text-sm">
+                  <span className="text-gray-600 dark:text-gray-300">Session:</span>
+                  <span className="ml-1 font-mono font-bold text-blue-800 dark:text-blue-200">
+                    {formatSessionTime(sessionTime)}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {session?.user?.name}
+                </div>
+              </div>
+            )}
             {/* Keyboard Shortcuts Help */}
-            <div className="text-xs text-gray-600 dark:text-gray-400 space-x-4 hidden md:flex">
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">F1</kbd> Focus Product</span>
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">F2</kbd> Complete Sale</span>
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">F3</kbd> Clear Cart</span>
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">F4</kbd> Search</span>
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-700 rounded">Enter</kbd> Add Item</span>
+            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-4 hidden md:flex">
+              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">F1</kbd> Focus Product</span>
+              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">F2</kbd> Complete Sale</span>
+              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">F3</kbd> Clear Cart</span>
+              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">F4</kbd> Search</span>
+              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">Enter</kbd> Add Item</span>
             </div>
             
             {/* Logout button for cashier users */}
@@ -427,7 +462,7 @@ export default function POSSystem() {
 
       <div className="p-4">
         {/* Top Input Row - Quick Access */}
-        <div className="mb-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4">
+        <div className="mb-4 bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
           {/* Global Discount Indicator */}
           {discount && parseFloat(discount) > 0 && (
             <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
@@ -462,7 +497,7 @@ export default function POSSystem() {
                 value={productId}
                 onChange={(e) => setProductId(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addToCart()}
-                className="w-full h-12 px-4 text-lg font-mono border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="w-full h-12 px-4 text-lg font-mono border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
                 placeholder="Scan or type product..."
                 autoFocus
               />
@@ -476,7 +511,7 @@ export default function POSSystem() {
               <div className="flex">
                 <button
                   onClick={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
-                  className="h-12 w-12 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-l-lg border border-r-0 flex items-center justify-center"
+                  className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">−</span>
                 </button>
@@ -484,12 +519,12 @@ export default function POSSystem() {
                   type="number"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
                   min="1"
                 />
                 <button
                   onClick={() => setQuantity((parseInt(quantity) + 1).toString())}
-                  className="h-12 w-12 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-r-lg border border-l-0 flex items-center justify-center"
+                  className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">+</span>
                 </button>
@@ -510,7 +545,7 @@ export default function POSSystem() {
                   type="number"
                   value={discount}
                   onChange={(e) => setDiscount(e.target.value)}
-                  className={`flex-1 h-12 px-4 text-lg border rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 ${
+                  className={`flex-1 h-12 px-4 text-lg border rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100 ${
                     discount && parseFloat(discount) > 0 
                       ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
                       : ''
@@ -522,7 +557,7 @@ export default function POSSystem() {
                 {discount && (
                   <button
                     onClick={() => setDiscount('')}
-                    className="h-12 px-3 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-r-lg border border-l-0 text-gray-600 dark:text-gray-300 text-sm"
+                    className="h-12 px-3 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 text-gray-600 dark:text-gray-300 text-sm"
                     title="Clear discount"
                   >
                     ×
@@ -568,7 +603,7 @@ export default function POSSystem() {
                 <div className="text-right">
                   {discount && parseFloat(discount) > 0 ? (
                     <div>
-                      <span className="text-sm text-gray-500 dark:text-gray-400 line-through">
+                      <span className="text-sm text-gray-500 dark:text-gray-300 line-through">
                         ${getProductPrice(findProduct(productId)).toFixed(2)}
                       </span>
                       <span className="ml-2 font-bold text-lg text-green-600 dark:text-green-400">
@@ -593,7 +628,7 @@ export default function POSSystem() {
         <div className="grid grid-cols-12 gap-4">
           {/* Product Grid - 8 columns */}
           <div className="col-span-8">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 h-fit">
+            <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4 h-fit">
               <div className="mb-4 space-y-3">
                 {/* Search and Sort Controls */}
                 <div className="flex gap-3 items-center">
@@ -601,7 +636,7 @@ export default function POSSystem() {
                     type="text"
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
-                    className="flex-1 h-10 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="flex-1 h-10 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
                     placeholder="Search products..."
                   />
                   
@@ -609,7 +644,7 @@ export default function POSSystem() {
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 text-sm"
+                    className="h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100 text-sm"
                   >
                     <option value="popularity">Popularity</option>
                     <option value="name">Name</option>
@@ -621,7 +656,7 @@ export default function POSSystem() {
                   {/* Sort Order Toggle */}
                   <button
                     onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                    className="h-10 px-4 bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    className="h-10 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                     title={`Sort ${sortOrder === 'desc' ? 'Ascending' : 'Descending'}`}
                   >
                     {sortOrder === 'desc' ? (
@@ -639,7 +674,7 @@ export default function POSSystem() {
                 </div>
                 
                 {/* Sort Info */}
-                <div className="text-xs text-gray-600 dark:text-gray-400 flex justify-between items-center">
+                <div className="text-xs text-gray-600 dark:text-gray-300 flex justify-between items-center">
                   <span>
                     Showing {filteredProducts.length} products sorted by{' '}
                     <span className="font-medium">
@@ -655,19 +690,19 @@ export default function POSSystem() {
                   <div className="flex gap-1">
                     <button
                       onClick={() => {setSortBy('popularity'); setSortOrder('desc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'popularity' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                      className={`px-2 py-1 text-xs rounded ${sortBy === 'popularity' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
                       🔥 Hot
                     </button>
                     <button
                       onClick={() => {setSortBy('price'); setSortOrder('asc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'price' && sortOrder === 'asc' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                      className={`px-2 py-1 text-xs rounded ${sortBy === 'price' && sortOrder === 'asc' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
                       💰 Cheap
                     </button>
                     <button
                       onClick={() => {setSortBy('name'); setSortOrder('asc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'name' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                      className={`px-2 py-1 text-xs rounded ${sortBy === 'name' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
                       🔤 A-Z
                     </button>
@@ -779,7 +814,7 @@ export default function POSSystem() {
                         ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'
                         : isExpensive && sortBy === 'price'
                         ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700'
-                        : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                        : 'bg-gray-50 dark:bg-black border-gray-200 dark:border-gray-600'
                     } hover:bg-blue-50 dark:hover:bg-blue-900/20`}
                   >
                     {/* Dynamic Badge based on sort type */}
@@ -816,14 +851,14 @@ export default function POSSystem() {
                     <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-1 truncate" title={product.name}>
                       {product.name}
                     </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-mono">
+                    <div className="text-xs text-gray-600 dark:text-gray-300 mb-1 font-mono">
                       {product.sku}
                     </div>
                     <div className="flex justify-between items-center">
                       <div className="text-left">
                         {discount && parseFloat(discount) > 0 ? (
                           <div>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 line-through">
+                            <span className="text-xs text-gray-500 dark:text-gray-300 line-through">
                               ${getProductPrice(product).toFixed(2)}
                             </span>
                             <div className="font-bold text-green-600 dark:text-green-400">
@@ -862,7 +897,7 @@ export default function POSSystem() {
 
           {/* Cart & Checkout - 4 columns */}
           <div className="col-span-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4">
+            <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5" />
                 Cart ({cart.length} items)
@@ -871,19 +906,19 @@ export default function POSSystem() {
               {/* Cart Items */}
               <div className="max-h-64 overflow-y-auto mb-4">
                 {cart.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-300">
                     Cart is empty
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {cart.map((item, index) => (
-                      <div key={index} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <div key={index} className="p-3 bg-gray-50 dark:bg-black rounded-lg border border-gray-200 dark:border-gray-600">
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex-1">
                             <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate" title={item.name}>
                               {item.name}
                             </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                            <div className="text-xs text-gray-600 dark:text-gray-300 font-mono">
                               {item.sku} • ${item.unitPrice.toFixed(2)} each
                             </div>
                           </div>
@@ -898,7 +933,7 @@ export default function POSSystem() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => updateQuantity(index, item.quantity - 1)}
-                              className="w-7 h-7 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded text-sm font-bold transition-colors"
+                              className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
                             >
                               −
                             </button>
@@ -906,13 +941,13 @@ export default function POSSystem() {
                               type="number"
                               value={item.quantity}
                               onChange={(e) => updateQuantity(index, parseInt(e.target.value) || 1)}
-                              className="w-12 h-7 text-center text-sm font-mono bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded"
+                              className="w-12 h-7 text-center text-sm font-mono bg-white dark:bg-black border border-gray-300 dark:border-gray-600 rounded"
                               min="1"
                               max={item.availableStock}
                             />
                             <button
                               onClick={() => updateQuantity(index, item.quantity + 1)}
-                              className="w-7 h-7 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded text-sm font-bold transition-colors"
+                              className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
                             >
                               +
                             </button>
@@ -922,7 +957,7 @@ export default function POSSystem() {
                               ${item.total.toFixed(2)}
                             </div>
                             {item.discount > 0 && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                              <div className="text-xs text-gray-500 dark:text-gray-300">
                                 {item.discount}% off
                               </div>
                             )}
