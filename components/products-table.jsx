@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, Trash2, Plus, Search, QrCode } from "lucide-react"
+import { Pencil, Trash2, Plus, Search, QrCode, Package } from "lucide-react"
 import AddProductModal from "./add-product-modal"
 import DeleteProductModal from "./delete-product-modal"
+import RestockProductModal from "./restock-product-modal"
 import BarcodeSticker from "./barcode-sticker"
 import BulkBarcodeSticker from "./bulk-barcode-sticker"
 
@@ -24,6 +25,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [restockModalOpen, setRestockModalOpen] = useState(false)
   const [barcodeModalOpen, setBarcodeModalOpen] = useState(false)
   const [bulkBarcodeModalOpen, setBulkBarcodeModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
@@ -86,6 +88,11 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
     setDeleteModalOpen(true)
   }
 
+  const handleRestockProduct = (product) => {
+    setSelectedProduct(product)
+    setRestockModalOpen(true)
+  }
+
   const handleBarcodeSticker = (product) => {
     setSelectedProduct(product)
     setBarcodeModalOpen(true)
@@ -101,6 +108,10 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
     } else if (action === 'updated') {
       setProducts(prev => prev.map(p => p.id === product.id ? product : p))
     }
+  }
+
+  const handleRestockSuccess = (product) => {
+    setProducts(prev => prev.map(p => p.id === product.id ? product : p))
   }
 
   const handleDeleteSuccess = (productId) => {
@@ -224,14 +235,25 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
                     variant="outline" 
                     size="sm"
                     onClick={() => handleEditProduct(product)}
+                    title="Edit Product"
                   >
                     <Pencil className="h-3 w-3" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleRestockProduct(product)}
+                    title="Restock Product"
+                    className="text-blue-600 hover:text-blue-700"
+                  >
+                    <Package className="h-3 w-3" />
                   </Button>
                   <Button 
                     variant="outline" 
                     size="sm" 
                     disabled={loading}
                     onClick={() => handleDeleteProduct(product)}
+                    title="Delete Product"
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
@@ -274,6 +296,14 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
         isOpen={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
         onSuccess={handleDeleteSuccess}
+        product={selectedProduct}
+      />
+
+      {/* Restock Product Modal */}
+      <RestockProductModal
+        isOpen={restockModalOpen}
+        onClose={() => setRestockModalOpen(false)}
+        onSuccess={handleRestockSuccess}
         product={selectedProduct}
       />
 

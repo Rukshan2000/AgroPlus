@@ -37,7 +37,11 @@ export default function AddProductModal({
     is_active: true,
     image_url: "",
     unit_type: "kg",
-    unit_value: ""
+    unit_value: "",
+    expiry_date: "",
+    manufacture_date: "",
+    alert_before_days: "7",
+    minimum_quantity: "5"
   })
   const [errors, setErrors] = useState({})
 
@@ -75,7 +79,11 @@ export default function AddProductModal({
           is_active: product.is_active,
           image_url: product.image_url || "",
           unit_type: product.unit_type || "kg",
-          unit_value: product.unit_value?.toString() || ""
+          unit_value: product.unit_value?.toString() || "",
+          expiry_date: product.expiry_date ? product.expiry_date.split('T')[0] : "",
+          manufacture_date: product.manufacture_date ? product.manufacture_date.split('T')[0] : "",
+          alert_before_days: product.alert_before_days?.toString() || "7",
+          minimum_quantity: product.minimum_quantity?.toString() || "5"
         })
       } else {
         // Add mode - reset form
@@ -91,7 +99,11 @@ export default function AddProductModal({
           is_active: true,
           image_url: "",
           unit_type: "kg",
-          unit_value: ""
+          unit_value: "",
+          expiry_date: "",
+          manufacture_date: "",
+          alert_before_days: "7",
+          minimum_quantity: "5"
         })
       }
       setErrors({})
@@ -141,6 +153,33 @@ export default function AddProductModal({
       }
     }
 
+    // Validate expiry and manufacture dates
+    if (formData.expiry_date && formData.manufacture_date) {
+      const expiryDate = new Date(formData.expiry_date)
+      const manufactureDate = new Date(formData.manufacture_date)
+      
+      if (manufactureDate >= expiryDate) {
+        newErrors.expiry_date = "Expiry date must be after manufacture date"
+      }
+    }
+
+    if (formData.manufacture_date) {
+      const manufactureDate = new Date(formData.manufacture_date)
+      const today = new Date()
+      
+      if (manufactureDate > today) {
+        newErrors.manufacture_date = "Manufacture date cannot be in the future"
+      }
+    }
+
+    if (formData.alert_before_days && (isNaN(parseInt(formData.alert_before_days)) || parseInt(formData.alert_before_days) < 1)) {
+      newErrors.alert_before_days = "Alert days must be a positive number"
+    }
+
+    if (formData.minimum_quantity && (isNaN(parseInt(formData.minimum_quantity)) || parseInt(formData.minimum_quantity) < 0)) {
+      newErrors.minimum_quantity = "Minimum quantity must be a non-negative number"
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -165,7 +204,11 @@ export default function AddProductModal({
         selling_price: parseFloat(formData.selling_price),
         stock_quantity: parseInt(formData.stock_quantity) || 0,
         unit_value: parseFloat(formData.unit_value),
-        image_url: formData.image_url.trim() || undefined
+        image_url: formData.image_url.trim() || undefined,
+        expiry_date: formData.expiry_date || null,
+        manufacture_date: formData.manufacture_date || null,
+        alert_before_days: parseInt(formData.alert_before_days) || 7,
+        minimum_quantity: parseInt(formData.minimum_quantity) || 5
       }
 
       const url = isEditing ? `/api/products/${product.id}` : "/api/products"
@@ -353,6 +396,81 @@ export default function AddProductModal({
               <p className="text-xs text-muted-foreground">
                 e.g., 50 for 50kg, 1 for single items, 250 for 250ml
               </p>
+            </div>
+          </div>
+
+          {/* Expiry Information Section */}
+          <div className="space-y-4">
+            <div className="text-lg font-semibold border-b pb-2">Expiry & Stock Management</div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="expiry_date">Expiry Date</Label>
+                <Input
+                  id="expiry_date"
+                  type="date"
+                  value={formData.expiry_date}
+                  onChange={(e) => handleInputChange("expiry_date", e.target.value)}
+                  className={errors.expiry_date ? "border-destructive" : ""}
+                />
+                {errors.expiry_date && (
+                  <p className="text-sm text-destructive">{errors.expiry_date}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="manufacture_date">Manufacture Date</Label>
+                <Input
+                  id="manufacture_date"
+                  type="date"
+                  value={formData.manufacture_date}
+                  onChange={(e) => handleInputChange("manufacture_date", e.target.value)}
+                  className={errors.manufacture_date ? "border-destructive" : ""}
+                />
+                {errors.manufacture_date && (
+                  <p className="text-sm text-destructive">{errors.manufacture_date}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="alert_before_days">Alert Before Days</Label>
+                <Input
+                  id="alert_before_days"
+                  type="number"
+                  min="1"
+                  value={formData.alert_before_days}
+                  onChange={(e) => handleInputChange("alert_before_days", e.target.value)}
+                  placeholder="7"
+                  className={errors.alert_before_days ? "border-destructive" : ""}
+                />
+                {errors.alert_before_days && (
+                  <p className="text-sm text-destructive">{errors.alert_before_days}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Days before expiry to show alerts
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="minimum_quantity">Minimum Stock Quantity</Label>
+                <Input
+                  id="minimum_quantity"
+                  type="number"
+                  min="0"
+                  value={formData.minimum_quantity}
+                  onChange={(e) => handleInputChange("minimum_quantity", e.target.value)}
+                  placeholder="5"
+                  className={errors.minimum_quantity ? "border-destructive" : ""}
+                />
+                {errors.minimum_quantity && (
+                  <p className="text-sm text-destructive">{errors.minimum_quantity}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Minimum stock level for low stock alerts
+                </p>
+              </div>
             </div>
           </div>
 

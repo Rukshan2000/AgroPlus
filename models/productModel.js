@@ -26,16 +26,28 @@ export async function createProduct({
   image_url, 
   created_by,
   unit_type = 'kg',
-  unit_value = 1.000
+  unit_value = 1.000,
+  expiry_date = null,
+  manufacture_date = null,
+  alert_before_days = 7,
+  minimum_quantity = 5
 }) {
   // Use selling_price if provided, otherwise fall back to price for backward compatibility
   const finalSellingPrice = selling_price || price || 0.00;
   
   const result = await query(`
-    INSERT INTO products (name, description, price, buying_price, selling_price, sku, category, stock_quantity, is_active, image_url, created_by, unit_type, unit_value)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    INSERT INTO products (
+      name, description, price, buying_price, selling_price, sku, category, 
+      stock_quantity, is_active, image_url, created_by, unit_type, unit_value,
+      expiry_date, manufacture_date, alert_before_days, minimum_quantity
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *
-  `, [name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, stock_quantity, is_active, image_url, created_by, unit_type, unit_value])
+  `, [
+    name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, 
+    stock_quantity, is_active, image_url, created_by, unit_type, unit_value,
+    expiry_date, manufacture_date, alert_before_days, minimum_quantity
+  ])
   return result.rows[0]
 }
 
@@ -103,7 +115,11 @@ export async function updateProduct(id, {
   is_active, 
   image_url,
   unit_type,
-  unit_value
+  unit_value,
+  expiry_date,
+  manufacture_date,
+  alert_before_days,
+  minimum_quantity
 }) {
   // Use selling_price if provided, otherwise fall back to price for backward compatibility
   const finalSellingPrice = selling_price || price;
@@ -122,10 +138,18 @@ export async function updateProduct(id, {
       image_url = $10,
       unit_type = $11,
       unit_value = $12,
+      expiry_date = $13,
+      manufacture_date = $14,
+      alert_before_days = $15,
+      minimum_quantity = $16,
       updated_at = NOW()
-    WHERE id = $13
+    WHERE id = $17
     RETURNING *
-  `, [name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, stock_quantity, is_active, image_url, unit_type, unit_value, id])
+  `, [
+    name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, 
+    stock_quantity, is_active, image_url, unit_type, unit_value,
+    expiry_date, manufacture_date, alert_before_days, minimum_quantity, id
+  ])
   return result.rows[0] || null
 }
 
@@ -179,4 +203,225 @@ export async function getProductsLowStock(threshold = 10) {
     ORDER BY available_quantity ASC
   `, [threshold])
   return result.rows
+}
+
+// Restock product function
+export async function restockProduct({
+  product_id,
+  quantity_added,
+  expiry_date = null,
+  manufacture_date = null,
+  notes = null,
+  restocked_by
+}) {
+  try {
+    console.log('Restock function called with:', {
+      product_id,
+      quantity_added,
+      expiry_date,
+      manufacture_date,
+      notes,
+      restocked_by
+    })
+
+    // Get current product info
+    const productResult = await query(
+      'SELECT stock_quantity, available_quantity FROM products WHERE id = $1',
+      [product_id]
+    )
+    
+    console.log('Product query result:', productResult.rows)
+    
+    if (productResult.rows.length === 0) {
+      throw new Error('Product not found')
+    }
+    
+    const currentProduct = productResult.rows[0]
+    const previous_stock = currentProduct.stock_quantity
+    const new_stock = previous_stock + quantity_added
+    
+    console.log('Stock calculation:', { previous_stock, quantity_added, new_stock })
+    
+    // Update product stock
+    const updateFields = [
+      'stock_quantity = stock_quantity + $1',
+      'available_quantity = available_quantity + $1',
+      'updated_at = NOW()'
+    ]
+    const updateParams = [quantity_added]
+    let paramIndex = 2
+    
+    // Update expiry and manufacture dates if provided
+    if (expiry_date) {
+      updateFields.push(`expiry_date = $${paramIndex}`)
+      updateParams.push(expiry_date)
+      paramIndex++
+    }
+    
+    if (manufacture_date) {
+      updateFields.push(`manufacture_date = $${paramIndex}`)
+      updateParams.push(manufacture_date)
+      paramIndex++
+    }
+    
+    const updateQuery = `
+      UPDATE products SET ${updateFields.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `
+    updateParams.push(product_id)
+    
+    console.log('Update query:', updateQuery)
+    console.log('Update params:', updateParams)
+    
+    const updatedProduct = await query(updateQuery, updateParams)
+    
+    console.log('Product updated successfully')
+    
+    // Record restock history
+    const historyInsert = await query(`
+      INSERT INTO restock_history (
+        product_id, quantity_added, previous_stock, new_stock, 
+        expiry_date, manufacture_date, notes, restocked_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `, [
+      product_id, quantity_added, previous_stock, new_stock,
+      expiry_date, manufacture_date, notes, restocked_by
+    ])
+    
+    console.log('Restock history recorded successfully')
+    
+    return {
+      success: true,
+      product: updatedProduct.rows[0],
+      restock_info: {
+        quantity_added,
+        previous_stock,
+        new_stock
+      }
+    }
+  } catch (error) {
+    console.error('Restock error details:', error)
+    throw error
+  }
+}
+
+// Get restock history for a product
+export async function getRestockHistory(product_id, limit = 50) {
+  const result = await query(`
+    SELECT 
+      rh.*,
+      u.name as restocked_by_name
+    FROM restock_history rh
+    LEFT JOIN users u ON rh.restocked_by = u.id
+    WHERE rh.product_id = $1
+    ORDER BY rh.restocked_at DESC
+    LIMIT $2
+  `, [product_id, limit])
+  
+  return result.rows
+}
+
+// Get products expiring soon
+export async function getProductsExpiringSoon(days_ahead = 7) {
+  const result = await query(`
+    SELECT 
+      p.*,
+      CASE 
+        WHEN p.expiry_date <= CURRENT_DATE THEN 'expired'
+        WHEN p.expiry_date <= CURRENT_DATE + INTERVAL '${days_ahead} days' THEN 'expiring_soon'
+        ELSE 'safe'
+      END as expiry_status,
+      (p.expiry_date - CURRENT_DATE) as days_until_expiry
+    FROM products p
+    WHERE p.is_active = true 
+      AND p.expiry_date IS NOT NULL
+      AND p.expiry_date <= CURRENT_DATE + INTERVAL '${days_ahead} days'
+    ORDER BY p.expiry_date ASC
+  `)
+  
+  return result.rows
+}
+
+// Get products with custom alert timing
+export async function getProductsWithAlerts() {
+  const result = await query(`
+    SELECT 
+      p.*,
+      CASE 
+        WHEN p.expiry_date <= CURRENT_DATE THEN 'expired'
+        WHEN p.expiry_date <= CURRENT_DATE + INTERVAL '1 day' * p.alert_before_days THEN 'expiring_soon'
+        ELSE 'safe'
+      END as expiry_status,
+      (p.expiry_date - CURRENT_DATE) as days_until_expiry,
+      CASE 
+        WHEN p.available_quantity <= p.minimum_quantity THEN 'low_stock'
+        ELSE 'sufficient'
+      END as stock_status
+    FROM products p
+    WHERE p.is_active = true 
+      AND (
+        (p.expiry_date IS NOT NULL AND p.expiry_date <= CURRENT_DATE + INTERVAL '1 day' * p.alert_before_days)
+        OR p.available_quantity <= p.minimum_quantity
+      )
+    ORDER BY 
+      CASE WHEN p.expiry_date <= CURRENT_DATE THEN 0 ELSE 1 END,
+      p.expiry_date ASC,
+      p.available_quantity ASC
+  `)
+  
+  return result.rows
+}
+
+// Update product with expiry information
+export async function updateProductExpiry(id, {
+  expiry_date,
+  manufacture_date,
+  alert_before_days,
+  minimum_quantity
+}) {
+  const fields = []
+  const params = []
+  let paramIndex = 1
+  
+  if (expiry_date !== undefined) {
+    fields.push(`expiry_date = $${paramIndex}`)
+    params.push(expiry_date)
+    paramIndex++
+  }
+  
+  if (manufacture_date !== undefined) {
+    fields.push(`manufacture_date = $${paramIndex}`)
+    params.push(manufacture_date)
+    paramIndex++
+  }
+  
+  if (alert_before_days !== undefined) {
+    fields.push(`alert_before_days = $${paramIndex}`)
+    params.push(alert_before_days)
+    paramIndex++
+  }
+  
+  if (minimum_quantity !== undefined) {
+    fields.push(`minimum_quantity = $${paramIndex}`)
+    params.push(minimum_quantity)
+    paramIndex++
+  }
+  
+  if (fields.length === 0) {
+    throw new Error('No fields to update')
+  }
+  
+  fields.push('updated_at = NOW()')
+  params.push(id)
+  
+  const result = await query(`
+    UPDATE products 
+    SET ${fields.join(', ')}
+    WHERE id = $${paramIndex}
+    RETURNING *
+  `, params)
+  
+  return result.rows[0] || null
 }

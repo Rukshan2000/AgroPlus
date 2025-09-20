@@ -102,6 +102,7 @@ export default function DashboardPage() {
     hourlySales,
     monthlyTrends,
     lowStockAlerts,
+    expiryAlerts,
     productStats,
     userStats,
     recentActivity
@@ -319,7 +320,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Alerts and Recent Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Low Stock Alerts */}
         <Card>
           <CardHeader>
@@ -344,6 +345,38 @@ export default function DashboardPage() {
                   </div>
                 </div>
               )) || <div className="text-center text-muted-foreground p-4">No low stock alerts</div>}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Expiry Alerts */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-red-600" />
+              Expiry Alerts
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {expiryAlerts?.slice(0, 5).map((product) => (
+                <div key={`expiry-${product.id}`} className="flex items-center justify-between p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                  <div>
+                    <div className="font-medium">{product.name}</div>
+                    <div className="text-sm text-muted-foreground">{product.sku}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`font-bold ${product.expiry_status === 'expired' ? 'text-red-600' : 'text-orange-600'}`}>
+                      {product.expiry_status === 'expired' ? 'Expired' : 
+                       product.days_until_expiry === 0 ? 'Expires today' :
+                       `${product.days_until_expiry} days`}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {product.expiry_date ? new Date(product.expiry_date).toLocaleDateString() : 'No expiry date'}
+                    </div>
+                  </div>
+                </div>
+              )) || <div className="text-center text-muted-foreground p-4">No expiry alerts</div>}
             </div>
           </CardContent>
         </Card>

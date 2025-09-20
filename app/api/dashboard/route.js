@@ -13,6 +13,7 @@ import {
   getMostProfitableCategories,
   getProfitTrends
 } from '../../../models/salesModel'
+import { getProductsWithAlerts } from '../../../models/productModel'
 import { query } from '../../../lib/db'
 
 export async function GET(request) {
@@ -97,6 +98,15 @@ export async function GET(request) {
       console.log('Low stock alerts count:', lowStockAlerts.length)
     } catch (error) {
       console.error('Error fetching low stock alerts:', error)
+    }
+    
+    // Get expiry alerts
+    let expiryAlerts = []
+    try {
+      expiryAlerts = await getProductsWithAlerts()
+      console.log('Expiry alerts count:', expiryAlerts.length)
+    } catch (error) {
+      console.error('Error fetching expiry alerts:', error)
     }
     
     // Get product stats
@@ -204,6 +214,7 @@ export async function GET(request) {
       hourlySales,
       monthlyTrends,
       lowStockAlerts,
+      expiryAlerts,
       productStats,
       userStats,
       recentActivity,
