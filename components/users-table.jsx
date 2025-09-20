@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import AddUserModal from "./add-user-modal"
 
 export default function UsersTable({ initialUsers = [] }) {
   const [users, setUsers] = useState(initialUsers)
@@ -27,10 +28,17 @@ export default function UsersTable({ initialUsers = [] }) {
     }
   }
 
+  const handleUserAdded = (newUser) => {
+    setUsers([...users, newUser])
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Users</CardTitle>
+        <div className="flex justify-between items-center">
+          <CardTitle>Users</CardTitle>
+          <AddUserModal onUserAdded={handleUserAdded} />
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid gap-2">

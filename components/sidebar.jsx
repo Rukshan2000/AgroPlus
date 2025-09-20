@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3 } from "lucide-react"
+import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3, Clock, DollarSign } from "lucide-react"
 
 import {
   Sidebar as UiSidebar,
@@ -95,6 +95,8 @@ function NavMenu({ role }) {
     { href: "/sales", label: "Sales History", icon: BarChart3, roles: ["admin", "manager", "user"] },
     { href: "/products", label: "Products", icon: Package, roles: ["admin", "manager", "user"] },
     { href: "/categories", label: "Categories", icon: Tag, roles: ["admin", "manager", "user"] },
+    { href: "/hr", label: "HR Dashboard", icon: Clock, roles: ["admin", "manager"] },
+    { href: "/hr/payroll", label: "Payroll", icon: DollarSign, roles: ["admin", "manager"] },
     { href: "/users", label: "Users", icon: Users, roles: ["admin", "manager"] },
     { href: "/settings", label: "Settings", icon: Settings, roles: ["admin", "manager", "user"] },
     { href: "/", label: "Home", icon: Home, roles: ["admin", "manager", "user"] },

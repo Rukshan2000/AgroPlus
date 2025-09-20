@@ -8,11 +8,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function AuthForm({ mode = "login" }) {
   const isLogin = mode === "login"
   const [csrf, setCsrf] = useState("")
-  const [form, setForm] = useState({ email: "", password: "", name: "" })
+  const [form, setForm] = useState({ 
+    email: "", 
+    password: "", 
+    name: "", 
+    role: "user",
+    hourlyRate: "",
+    position: ""
+  })
   const [error, setError] = useState("")
   const router = useRouter()
 
@@ -70,15 +78,58 @@ export default function AuthForm({ mode = "login" }) {
         ) : null}
         <form onSubmit={onSubmit} className="grid gap-4">
           {!isLogin && (
-            <div className="grid gap-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-              />
-            </div>
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="role">Role</Label>
+                <Select value={form.role} onValueChange={(value) => setForm({ ...form, role: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="cashier">Cashier</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {(form.role === 'cashier' || form.role === 'user') && (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="hourlyRate">Hourly Rate ($)</Label>
+                    <Input
+                      id="hourlyRate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.hourlyRate}
+                      onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
+                      placeholder="15.00"
+                      required={form.role === 'cashier'}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="position">Position</Label>
+                    <Input
+                      id="position"
+                      value={form.position}
+                      onChange={(e) => setForm({ ...form, position: e.target.value })}
+                      placeholder="Cashier, Sales Associate, etc."
+                      required={form.role === 'cashier'}
+                    />
+                  </div>
+                </>
+              )}
+            </>
           )}
           <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>

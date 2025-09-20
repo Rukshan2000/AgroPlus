@@ -2,6 +2,7 @@ import { comparePassword, hashPassword } from "../lib/hash"
 import { getSession, createSession, destroySession } from "../lib/auth"
 import { loginSchema, registerSchema } from "../lib/validators"
 import { findUserByEmail, createUser } from "../models/userModel"
+import { createWorkSession, endWorkSession, getCurrentWorkSession, createPayrollInfo } from "../models/hrModel"
 import { getOrCreateCsrfToken, validateCsrf } from "../lib/csrf"
 import { NextResponse } from "next/server"
 
@@ -24,14 +25,31 @@ export async function register(request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input", details: parsed.error.flatten() }, { status: 400 })
   }
-  const { email, password, name } = parsed.data
+  const { email, password, name, role = "user", hourlyRate, position } = parsed.data
   const existing = await findUserByEmail(email)
   if (existing) {
     return NextResponse.json({ error: "Email already registered" }, { status: 409 })
   }
   const password_hash = await hashPassword(password)
-  // Default role is 'user'; seeds will create admin
-  const user = await createUser({ email, password_hash, name, role: "user" })
+  
+  // Create user with specified role
+  const user = await createUser({ email, password_hash, name, role })
+  
+  // Create payroll info if hourly rate is provided (for cashiers/employees)
+  if (hourlyRate && (role === 'cashier' || role === 'user')) {
+    try {
+      await createPayrollInfo({
+        user_id: user.id,
+        hourly_rate: parseFloat(hourlyRate),
+        position: position || 'Employee',
+        hire_date: new Date().toISOString().split('T')[0]
+      })
+    } catch (error) {
+      console.error('Error creating payroll info:', error)
+      // Don't fail registration if payroll creation fails
+    }
+  }
+  
   await createSession(user.id)
   // Ensure CSRF token is set for client
   await getOrCreateCsrfToken()
@@ -58,6 +76,24 @@ export async function login(request) {
   }
   await createSession(user.id)
   await getOrCreateCsrfToken()
+  
+  // Create work session for cashier users
+  if (user.role === 'cashier') {
+    try {
+      // End any existing active session first (in case of unexpected logout)
+      const existingSession = await getCurrentWorkSession(user.id)
+      if (existingSession) {
+        await endWorkSession(user.id, 'Auto-ended on new login')
+      }
+      
+      // Create new work session
+      await createWorkSession(user.id)
+    } catch (error) {
+      console.error('Error creating work session:', error)
+      // Don't fail login if work session creation fails
+    }
+  }
+  
   return NextResponse.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } })
 }
 
@@ -66,6 +102,19 @@ export async function logout(request) {
   if (!(await validateCsrf(request.headers))) {
     return NextResponse.json({ error: "Invalid CSRF token" }, { status: 403 })
   }
+  
+  // Get current session to check if user is cashier
+  const session = await getSession()
+  if (session && session.user.role === 'cashier') {
+    try {
+      // End work session for cashier
+      await endWorkSession(session.user.id, 'Normal logout')
+    } catch (error) {
+      console.error('Error ending work session:', error)
+      // Don't fail logout if work session end fails
+    }
+  }
+  
   await destroySession()
   return NextResponse.json({ ok: true })
 }
