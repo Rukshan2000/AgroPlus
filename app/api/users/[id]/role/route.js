@@ -1,4 +1,4 @@
-import { changeRole } from "../../../../controllers/userController"
+import { changeRole } from "../../../../../controllers/userController"
 
 export const dynamic = "force-dynamic"
 

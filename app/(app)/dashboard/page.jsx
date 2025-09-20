@@ -1,5 +1,6 @@
 import { getSession } from "../../../lib/auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import CashierRedirect from "../../../components/cashier-redirect"
 
 export const dynamic = "force-dynamic"
 
@@ -7,6 +8,7 @@ export default async function DashboardPage() {
   const session = await getSession()
   return (
     <div className="grid gap-6">
+      <CashierRedirect />
       <h1 className="text-2xl font-semibold">Dashboard</h1>
       <div className="grid md:grid-cols-3 gap-4">
         <Card>

@@ -135,3 +135,36 @@ export function getAvailableUnits() {
     { value: 'packets', label: 'Packets' }
   ]
 }
+
+export async function updateProductQuantities(id, { sold_quantity, available_quantity }) {
+  const result = await query(`
+    UPDATE products SET 
+      sold_quantity = $1,
+      available_quantity = $2,
+      updated_at = NOW()
+    WHERE id = $3
+    RETURNING *
+  `, [sold_quantity, available_quantity, id])
+  return result.rows[0] || null
+}
+
+export async function adjustStock(id, quantity_change) {
+  const result = await query(`
+    UPDATE products SET 
+      stock_quantity = stock_quantity + $1,
+      available_quantity = available_quantity + $1,
+      updated_at = NOW()
+    WHERE id = $2
+    RETURNING *
+  `, [quantity_change, id])
+  return result.rows[0] || null
+}
+
+export async function getProductsLowStock(threshold = 10) {
+  const result = await query(`
+    SELECT * FROM products 
+    WHERE available_quantity <= $1 AND is_active = true
+    ORDER BY available_quantity ASC
+  `, [threshold])
+  return result.rows
+}

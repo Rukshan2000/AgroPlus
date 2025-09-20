@@ -56,6 +56,7 @@ export default function UsersTable({ initialUsers = [] }) {
                     <SelectItem value="admin">admin</SelectItem>
                     <SelectItem value="manager">manager</SelectItem>
                     <SelectItem value="user">user</SelectItem>
+                    <SelectItem value="cashier">cashier</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button variant="secondary" onClick={() => updateRole(u.id, u.role)}>

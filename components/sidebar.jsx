@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag } from "lucide-react"
+import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3 } from "lucide-react"
 
 import {
   Sidebar as UiSidebar,
@@ -21,6 +21,17 @@ import {
 } from "@/components/ui/sidebar"
 
 export function AppSidebarWrapper({ children, session }) {
+  const userRole = session?.user?.role;
+  
+  // For cashier role, don't show sidebar at all
+  if (userRole === 'cashier') {
+    return (
+      <div className="min-h-screen">
+        {children}
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <UiSidebar collapsible="icon">
@@ -80,6 +91,8 @@ function NavMenu({ role }) {
   const pathname = usePathname()
   const items = [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "user"] },
+    { href: "/pos", label: "POS System", icon: ShoppingCart, roles: ["admin", "manager", "user", "cashier"] },
+    { href: "/sales", label: "Sales History", icon: BarChart3, roles: ["admin", "manager", "user"] },
     { href: "/products", label: "Products", icon: Package, roles: ["admin", "manager", "user"] },
     { href: "/categories", label: "Categories", icon: Tag, roles: ["admin", "manager", "user"] },
     { href: "/users", label: "Users", icon: Users, roles: ["admin", "manager"] },

@@ -45,7 +45,13 @@ export default function AuthForm({ mode = "login" }) {
       setError(data.error || "Something went wrong")
       return
     }
-    router.replace("/dashboard")
+    
+    // Redirect based on user role
+    if (data.user && data.user.role === 'cashier') {
+      router.replace("/pos")
+    } else {
+      router.replace("/dashboard")
+    }
   }
 
   return (

@@ -31,7 +31,7 @@ const updateProductSchema = productSchema.partial()
 export async function list(request) {
   const session = await getSession()
   try {
-    requireRoleOrThrow(session, ["admin", "manager", "user"])
+    requireRoleOrThrow(session, ["admin", "manager", "user", "cashier"])
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: e.status || 403 })
   }
