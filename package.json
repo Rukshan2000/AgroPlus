@@ -2,6 +2,7 @@
   "name": "agro-plus",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "next build",
     "dev": "next dev",
@@ -10,7 +11,8 @@
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
     "db:setup": "npm run db:migrate && npm run db:seed",
-    "db:reset": "npm run db:migrate && npm run db:seed"
+    "db:reset": "npm run db:migrate && npm run db:seed",
+    "db:loyalty": "node scripts/migrate-loyalty.js"
   },
   "dependencies": {
     "@edge-runtime/vm": "latest",

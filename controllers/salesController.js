@@ -7,12 +7,15 @@ import {
   getTopSellingProducts 
 } from '../models/salesModel'
 import { findProductById } from '../models/productModel'
+import { findCustomerById, addPointsToCustomer } from '../models/customerModel'
+import { findLoyaltyProgramById } from '../models/loyaltyProgramModel'
+import { markRedemptionAsUsed } from '../models/rewardModel'
 import { query } from '../lib/db'
 
 export class SalesController {
   // Process a new sale transaction
   static async processSale(saleData, userId) {
-    const { items, subtotal, tax, total } = saleData
+    const { items, subtotal, tax, total, customer_id, redemption_ids = [] } = saleData
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       throw new Error('Invalid items data')
@@ -46,6 +49,7 @@ export class SalesController {
           discount_percentage: item.discount_percentage || 0,
           discount_amount: item.discount_amount || 0,
           total_amount: item.total_amount,
+          customer_id: customer_id || null,
           created_by: userId
         })
 
@@ -62,6 +66,43 @@ export class SalesController {
         `, [item.quantity, item.product_id])
       }
 
+      // Process loyalty points if customer is specified
+      let loyaltyPointsAwarded = 0
+      if (customer_id) {
+        try {
+          const customer = await findCustomerById(customer_id)
+          if (customer && customer.loyalty_program_id) {
+            const program = await findLoyaltyProgramById(customer.loyalty_program_id)
+            if (program && program.is_active) {
+              loyaltyPointsAwarded = Math.floor(total * program.points_per_dollar)
+              if (loyaltyPointsAwarded > 0) {
+                await addPointsToCustomer(
+                  customer_id, 
+                  loyaltyPointsAwarded, 
+                  `Purchase - Receipt ${sales[0]?.id || 'N/A'}`,
+                  sales[0]?.id
+                )
+              }
+            }
+          }
+        } catch (loyaltyError) {
+          console.error('Error processing loyalty points:', loyaltyError)
+          // Don't fail the sale if loyalty processing fails
+        }
+      }
+
+      // Mark redemptions as used if any were applied
+      if (redemption_ids && redemption_ids.length > 0) {
+        try {
+          for (const redemptionId of redemption_ids) {
+            await markRedemptionAsUsed(redemptionId, sales[0]?.id)
+          }
+        } catch (redemptionError) {
+          console.error('Error marking redemptions as used:', redemptionError)
+          // Don't fail the sale if redemption marking fails
+        }
+      }
+
       // Commit transaction
       await query('COMMIT')
 
@@ -72,7 +113,9 @@ export class SalesController {
           tax,
           total,
           items_count: items.length,
-          total_quantity: items.reduce((sum, item) => sum + item.quantity, 0)
+          total_quantity: items.reduce((sum, item) => sum + item.quantity, 0),
+          loyalty_points_awarded: loyaltyPointsAwarded,
+          customer_id: customer_id || null
         }
       }
 
