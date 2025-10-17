@@ -121,7 +121,7 @@ function NavMenu({ role }) {
       label: "Main",
       items: [
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "user"] },
-        { href: "/", label: "Home", icon: Home, roles: ["admin", "manager", "user"] },
+        // { href: "/", label: "Home", icon: Home, roles: ["admin", "manager", "user"] },
       ]
     },
     {
