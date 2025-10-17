@@ -72,16 +72,16 @@ export default function Cart({
                 <div className="space-y-2 text-lg">
                   <div className="flex justify-between">
                     <span className="font-semibold text-gray-900 dark:text-gray-100">Subtotal:</span>
-                    <span className="font-bold text-gray-900 dark:text-gray-100">${subtotal.toFixed(2)}</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">LKR {subtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="font-semibold text-gray-900 dark:text-gray-100">Tax (8%):</span>
-                    <span className="font-bold text-gray-900 dark:text-gray-100">${tax.toFixed(2)}</span>
+                    <span className="font-bold text-gray-900 dark:text-gray-100">LKR {tax.toFixed(2)}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between text-2xl font-bold text-green-600 dark:text-green-400">
                     <span>TOTAL:</span>
-                    <span>${total.toFixed(2)}</span>
+                    <span>LKR {total.toFixed(2)}</span>
                   </div>
                 </div>
               </CardContent>

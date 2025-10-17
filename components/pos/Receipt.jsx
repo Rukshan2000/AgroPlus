@@ -37,11 +37,11 @@ export default function Receipt({
               <div className="flex-1">
                 <div className="font-semibold text-gray-900 dark:text-gray-100">{item.name}</div>
                 <div className="text-gray-600 dark:text-gray-400">
-                  {item.quantity} x ${item.unitPrice.toFixed(2)}
+                  {item.quantity} x LKR {item.unitPrice.toFixed(2)}
                   {item.discount > 0 && ` (-${item.discount}%)`}
                 </div>
               </div>
-              <div className="font-bold text-gray-900 dark:text-gray-100">${item.total.toFixed(2)}</div>
+              <div className="font-bold text-gray-900 dark:text-gray-100">LKR {item.total.toFixed(2)}</div>
             </div>
           ))}
         </div>
@@ -51,15 +51,15 @@ export default function Receipt({
         <div className="space-y-1 text-sm">
           <div className="flex justify-between text-gray-700 dark:text-gray-300">
             <span>Subtotal:</span>
-            <span>${subtotal.toFixed(2)}</span>
+            <span>LKR {subtotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-gray-700 dark:text-gray-300">
             <span>Tax:</span>
-            <span>${tax.toFixed(2)}</span>
+            <span>LKR {tax.toFixed(2)}</span>
           </div>
           <div className="flex justify-between font-bold text-lg border-t pt-2 text-gray-900 dark:text-gray-100">
             <span>Total:</span>
-            <span>${total.toFixed(2)}</span>
+            <span>LKR {total.toFixed(2)}</span>
           </div>
         </div>
         

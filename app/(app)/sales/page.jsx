@@ -115,7 +115,7 @@ export default function SalesPage() {
   }
 
   const formatCurrency = (amount) => {
-    return `$${parseFloat(amount).toFixed(2)}`
+    return `LKR ${parseFloat(amount).toFixed(2)}`
   }
 
   return (

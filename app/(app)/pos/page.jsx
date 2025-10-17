@@ -7,6 +7,7 @@ import { useSession } from '@/hooks/use-session'
 import ProductInput from '@/components/pos/ProductInput'
 import Cart from '@/components/pos/Cart'
 import Receipt from '@/components/pos/Receipt'
+import PriceVariationModal from '@/components/pos/price-variation-modal'
 import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
 import offlineProductModel from '@/models/offlineProductModel'
@@ -25,6 +26,8 @@ export default function POSSystem() {
   const [sortBy, setSortBy] = useState('popularity') // New sorting state
   const [sortOrder, setSortOrder] = useState('desc') // New sort order state
   const [sessionTime, setSessionTime] = useState(0) // Timer state
+  const [showPriceVariationModal, setShowPriceVariationModal] = useState(false)
+  const [selectedProductForVariation, setSelectedProductForVariation] = useState(null)
   const { toast } = useToast()
   const { session } = useSession()
 
@@ -181,10 +184,40 @@ export default function POSSystem() {
       return
     }
 
-    // Check if product is already in cart
-    const existingItemIndex = cart.findIndex(item => item.id === product.id)
+    // Check if product has price variations
+    try {
+      const res = await fetch(`/api/products/${product.id}/price-variations/active`)
+      if (res.ok) {
+        const data = await res.json()
+        const variations = data.variations || []
+        
+        if (variations.length > 0) {
+          // Show price variation modal
+          setSelectedProductForVariation(product)
+          setShowPriceVariationModal(true)
+          return
+        }
+      }
+    } catch (error) {
+      console.error('Error checking price variations:', error)
+    }
+
+    // No price variations, proceed with normal flow
+    addProductToCart(product, null)
+  }
+
+  const addProductToCart = (product, priceVariation = null) => {
+    // Check if product is already in cart (with same variation if applicable)
+    const variationKey = priceVariation ? `${product.id}-${priceVariation.id}` : product.id
+    const existingItemIndex = cart.findIndex(item => {
+      if (priceVariation) {
+        return item.id === product.id && item.variationId === priceVariation.id
+      }
+      return item.id === product.id && !item.variationId
+    })
+    
     const qty = parseInt(quantity) || 1
-    const productPrice = getProductPrice(product)
+    const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
     const discountPercent = parseFloat(discount) || 0
     const discountAmount = (productPrice * discountPercent) / 100
     const finalPrice = productPrice - discountAmount
@@ -219,7 +252,7 @@ export default function POSSystem() {
 
       toast({
         title: "Quantity updated",
-        description: `${product.name} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
         duration: 1000
       })
     } else {
@@ -238,6 +271,8 @@ export default function POSSystem() {
         id: product.id,
         sku: product.sku,
         name: product.name,
+        variationId: priceVariation?.id || null,
+        variationName: priceVariation?.variant_name || null,
         originalPrice: productPrice,
         quantity: qty,
         discount: discountPercent,
@@ -250,7 +285,7 @@ export default function POSSystem() {
 
       toast({
         title: "Added to cart",
-        description: `${product.name} × ${qty}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} × ${qty}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
         duration: 1000
       })
     }
@@ -263,6 +298,13 @@ export default function POSSystem() {
     setTimeout(() => {
       document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
     }, 100)
+  }
+
+  const handleVariationSelect = (variation) => {
+    if (selectedProductForVariation) {
+      addProductToCart(selectedProductForVariation, variation)
+      setSelectedProductForVariation(null)
+    }
   }
 
   const removeFromCart = (index) => {
@@ -647,10 +689,10 @@ export default function POSSystem() {
                   {discount && parseFloat(discount) > 0 ? (
                     <div>
                       <span className="text-sm text-gray-500 dark:text-gray-300 line-through">
-                        ${getProductPrice(findProduct(productId)).toFixed(2)}
+                        LKR {getProductPrice(findProduct(productId)).toFixed(2)}
                       </span>
                       <span className="ml-2 font-bold text-lg text-green-600 dark:text-green-400">
-                        ${(getProductPrice(findProduct(productId)) * (1 - parseFloat(discount) / 100)).toFixed(2)}
+                        LKR {(getProductPrice(findProduct(productId)) * (1 - parseFloat(discount) / 100)).toFixed(2)}
                       </span>
                       <div className="text-xs text-green-600 dark:text-green-400">
                         {discount}% OFF
@@ -658,7 +700,7 @@ export default function POSSystem() {
                     </div>
                   ) : (
                     <span className="font-bold text-lg text-blue-900 dark:text-blue-100">
-                      ${getProductPrice(findProduct(productId)).toFixed(2)}
+                      LKR {getProductPrice(findProduct(productId)).toFixed(2)}
                     </span>
                   )}
                 </div>
@@ -902,15 +944,15 @@ export default function POSSystem() {
                         {discount && parseFloat(discount) > 0 ? (
                           <div>
                             <span className="text-xs text-gray-500 dark:text-gray-300 line-through">
-                              ${getProductPrice(product).toFixed(2)}
+                              LKR {getProductPrice(product).toFixed(2)}
                             </span>
                             <div className="font-bold text-green-600 dark:text-green-400">
-                              ${(getProductPrice(product) * (1 - parseFloat(discount) / 100)).toFixed(2)}
+                              LKR {(getProductPrice(product) * (1 - parseFloat(discount) / 100)).toFixed(2)}
                             </div>
                           </div>
                         ) : (
                           <span className="font-bold text-green-600 dark:text-green-400">
-                            ${getProductPrice(product).toFixed(2)}
+                            LKR {getProductPrice(product).toFixed(2)}
                           </span>
                         )}
                       </div>
@@ -962,7 +1004,7 @@ export default function POSSystem() {
                               {item.name}
                             </div>
                             <div className="text-xs text-gray-600 dark:text-gray-300 font-mono">
-                              {item.sku} • ${item.unitPrice.toFixed(2)} each
+                              {item.sku} • LKR {item.unitPrice.toFixed(2)} each
                             </div>
                           </div>
                           <button
@@ -997,7 +1039,7 @@ export default function POSSystem() {
                           </div>
                           <div className="text-right">
                             <div className="font-bold text-green-600 dark:text-green-400">
-                              ${item.total.toFixed(2)}
+                              LKR {item.total.toFixed(2)}
                             </div>
                             {item.discount > 0 && (
                               <div className="text-xs text-gray-500 dark:text-gray-300">
@@ -1018,16 +1060,16 @@ export default function POSSystem() {
                   <div className="space-y-2">
                     <div className="flex justify-between text-lg">
                       <span className="font-semibold">Subtotal:</span>
-                      <span className="font-bold">${subtotal.toFixed(2)}</span>
+                      <span className="font-bold">LKR {subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-lg">
                       <span className="font-semibold">Tax (8%):</span>
-                      <span className="font-bold">${tax.toFixed(2)}</span>
+                      <span className="font-bold">LKR {tax.toFixed(2)}</span>
                     </div>
                     <div className="border-t dark:border-gray-600 pt-2">
                       <div className="flex justify-between text-2xl font-bold text-green-600 dark:text-green-400">
                         <span>TOTAL:</span>
-                        <span>${total.toFixed(2)}</span>
+                        <span>LKR {total.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -1063,6 +1105,17 @@ export default function POSSystem() {
         cart={cart}
         onPrint={printBill}
         onNewSale={handleNewSale}
+      />
+
+      {/* Price Variation Modal */}
+      <PriceVariationModal
+        isOpen={showPriceVariationModal}
+        onClose={() => {
+          setShowPriceVariationModal(false)
+          setSelectedProductForVariation(null)
+        }}
+        product={selectedProductForVariation}
+        onVariationSelect={handleVariationSelect}
       />
     </div>
   )

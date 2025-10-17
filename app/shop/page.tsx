@@ -68,7 +68,7 @@ export default function ShopPage() {
   }
 
   const formatPrice = (price: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(price)
+    new Intl.NumberFormat("en-LK", { style: "currency", currency: "LKR" }).format(price)
 
   const filteredProducts =
     selectedCategory === "all"

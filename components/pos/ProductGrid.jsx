@@ -193,7 +193,7 @@ export default function ProductGrid({
                     ? 'text-white' 
                     : 'text-green-600 dark:text-green-400'
                 }`}>
-                  ${parseFloat(product.price || 0).toFixed(2)}
+                  LKR {parseFloat(product.price || 0).toFixed(2)}
                 </div>
               </Button>
             ))}
@@ -234,7 +234,7 @@ export default function ProductGrid({
                       ? 'text-white' 
                       : 'text-green-600 dark:text-green-400'
                   }`}>
-                    ${parseFloat(product.price || 0).toFixed(2)}
+                    LKR {parseFloat(product.price || 0).toFixed(2)}
                   </div>
                   <div className={`text-xs ${
                     selectedIndex === index 

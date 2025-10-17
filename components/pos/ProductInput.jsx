@@ -112,7 +112,7 @@ export default function ProductInput({
             <Alert className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
               <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
               <AlertDescription className="text-green-800 dark:text-green-200 font-semibold">
-                ✓ {foundProduct.name} - ${getProductPrice(foundProduct).toFixed(2)}
+                ✓ {foundProduct.name} - LKR {getProductPrice(foundProduct).toFixed(2)}
                 <br />
                 Available: {foundProduct.available_quantity} units
               </AlertDescription>
@@ -183,7 +183,7 @@ export default function ProductInput({
             </div>
             {discount && parseFloat(discount) > 0 && foundProduct && (
               <p className="text-xs text-green-600 dark:text-green-400">
-                Save: ${((getProductPrice(foundProduct) * parseFloat(discount)) / 100 * parseInt(quantity || 1)).toFixed(2)}
+                Save: LKR {((getProductPrice(foundProduct) * parseFloat(discount)) / 100 * parseInt(quantity || 1)).toFixed(2)}
               </p>
             )}
           </div>
@@ -197,7 +197,7 @@ export default function ProductInput({
           disabled={!foundProduct}
         >
           <Plus className="h-5 w-5 mr-2" />
-          ADD TO CART {foundProduct && `($${(getProductPrice(foundProduct) * parseInt(quantity || 1) * (1 - (parseFloat(discount) || 0) / 100)).toFixed(2)})`}
+          ADD TO CART {foundProduct && `(LKR ${(getProductPrice(foundProduct) * parseInt(quantity || 1) * (1 - (parseFloat(discount) || 0) / 100)).toFixed(2)})`}
         </Button>
 
         {/* Product Search */}

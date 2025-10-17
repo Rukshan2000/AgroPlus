@@ -171,7 +171,7 @@ export default function DashboardPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${parseFloat(salesStats?.total_revenue || 0).toFixed(2)}</div>
+            <div className="text-2xl font-bold">LKR {parseFloat(salesStats?.total_revenue || 0).toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">From {salesStats?.total_sales || 0} sales</p>
           </CardContent>
         </Card>
@@ -193,7 +193,7 @@ export default function DashboardPage() {
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${parseFloat(salesStats?.average_sale_amount || 0).toFixed(2)}</div>
+            <div className="text-2xl font-bold">LKR {parseFloat(salesStats?.average_sale_amount || 0).toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">Per transaction</p>
           </CardContent>
         </Card>
@@ -231,7 +231,7 @@ export default function DashboardPage() {
                     beginAtZero: true,
                     ticks: {
                       callback: function(value) {
-                        return '$' + value;
+                        return 'LKR ' + value;
                       }
                     }
                   }
@@ -256,7 +256,7 @@ export default function DashboardPage() {
                   tooltip: {
                     callbacks: {
                       label: function(context) {
-                        return context.label + ': $' + context.parsed.toFixed(2);
+                        return context.label + ': LKR ' + context.parsed.toFixed(2);
                       }
                     }
                   }
@@ -310,7 +310,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-right">
                     <div className="font-bold">{product.total_quantity_sold} sold</div>
-                    <div className="text-sm text-muted-foreground">${parseFloat(product.total_revenue).toFixed(2)}</div>
+                    <div className="text-sm text-muted-foreground">LKR {parseFloat(product.total_revenue).toFixed(2)}</div>
                   </div>
                 </div>
               )) || <div className="text-center text-muted-foreground">No data available</div>}
@@ -400,7 +400,7 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold">${parseFloat(sale.total_amount).toFixed(2)}</div>
+                    <div className="font-bold">LKR {parseFloat(sale.total_amount).toFixed(2)}</div>
                     <div className="text-sm text-muted-foreground">Qty: {sale.quantity}</div>
                   </div>
                 </div>
@@ -440,8 +440,8 @@ export default function DashboardPage() {
                       </td>
                       <td className="text-right p-2">{cashier.total_sales}</td>
                       <td className="text-right p-2">{cashier.items_sold}</td>
-                      <td className="text-right p-2">${parseFloat(cashier.total_revenue).toFixed(2)}</td>
-                      <td className="text-right p-2">${parseFloat(cashier.avg_sale_amount).toFixed(2)}</td>
+                      <td className="text-right p-2">LKR {parseFloat(cashier.total_revenue).toFixed(2)}</td>
+                      <td className="text-right p-2">LKR {parseFloat(cashier.avg_sale_amount).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>

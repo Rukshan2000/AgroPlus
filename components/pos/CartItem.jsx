@@ -30,11 +30,16 @@ export default function CartItem({
         <div className="flex justify-between items-start mb-3">
           <div className="flex-1">
             <h4 className="font-bold text-lg text-gray-900 dark:text-gray-100">{item.name}</h4>
+            {item.variationName && (
+              <Badge variant="outline" className="text-xs mb-1">
+                {item.variationName}
+              </Badge>
+            )}
             <p className="text-gray-600 dark:text-gray-400 text-sm">
               SKU: {item.sku || item.id}
             </p>
             <p className="text-gray-600 dark:text-gray-400">
-              ${item.originalPrice.toFixed(2)} 
+              LKR {item.originalPrice.toFixed(2)} 
               {item.discount > 0 && (
                 <span className="text-red-600 dark:text-red-400 font-semibold ml-1">
                   (-{item.discount}%)
@@ -74,7 +79,7 @@ export default function CartItem({
           
           <div className="text-right">
             <p className="font-bold text-xl text-green-600 dark:text-green-400">
-              ${item.total.toFixed(2)}
+              LKR {item.total.toFixed(2)}
             </p>
           </div>
         </div>
