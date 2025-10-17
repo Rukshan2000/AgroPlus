@@ -8,7 +8,8 @@ import {
   DollarSign,
   BarChart3,
   Search,
-  Filter
+  Filter,
+  Undo2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/hooks/use-toast'
+import ProcessReturnModal from '@/components/process-return-modal'
 
 export default function SalesPage() {
   const [sales, setSales] = useState([])
@@ -48,6 +50,8 @@ export default function SalesPage() {
     total: 0,
     totalPages: 0
   })
+  const [returnModalOpen, setReturnModalOpen] = useState(false)
+  const [selectedSale, setSelectedSale] = useState(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -116,6 +120,25 @@ export default function SalesPage() {
 
   const formatCurrency = (amount) => {
     return `LKR ${parseFloat(amount).toFixed(2)}`
+  }
+
+  const handleReturnClick = (sale) => {
+    setSelectedSale(sale)
+    setReturnModalOpen(true)
+  }
+
+  const handleReturnSuccess = () => {
+    loadSalesData()
+    loadStats()
+  }
+
+  const getReturnStatusBadge = (status) => {
+    if (status === 'full') {
+      return <Badge variant="destructive">Fully Returned</Badge>
+    } else if (status === 'partial') {
+      return <Badge variant="secondary">Partially Returned</Badge>
+    }
+    return null
   }
 
   return (
@@ -276,8 +299,10 @@ export default function SalesPage() {
                     <TableHead>Unit Price</TableHead>
                     <TableHead>Discount</TableHead>
                     <TableHead>Total</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Sold By</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -311,6 +336,9 @@ export default function SalesPage() {
                       <TableCell className="font-bold">
                         {formatCurrency(sale.total_amount)}
                       </TableCell>
+                      <TableCell>
+                        {getReturnStatusBadge(sale.return_status)}
+                      </TableCell>
                       <TableCell className="text-sm">
                         {formatDate(sale.sale_date)}
                       </TableCell>
@@ -318,6 +346,17 @@ export default function SalesPage() {
                         <Badge variant="outline">
                           {sale.sold_by || 'Unknown'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReturnClick(sale)}
+                          disabled={sale.return_status === 'full'}
+                        >
+                          <Undo2 className="h-3 w-3 mr-1" />
+                          Return
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -400,6 +439,14 @@ export default function SalesPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Return Modal */}
+      <ProcessReturnModal
+        isOpen={returnModalOpen}
+        onClose={() => setReturnModalOpen(false)}
+        sale={selectedSale}
+        onSuccess={handleReturnSuccess}
+      />
     </div>
   )
 }

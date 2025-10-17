@@ -43,19 +43,19 @@ export async function listSales({ page = 1, limit = 10, start_date, end_date, pr
   let paramIndex = 1
 
   if (start_date) {
-    whereConditions.push(`sale_date >= $${paramIndex}`)
+    whereConditions.push(`s.created_at >= $${paramIndex}`)
     params.push(start_date)
     paramIndex++
   }
 
   if (end_date) {
-    whereConditions.push(`sale_date <= $${paramIndex}`)
+    whereConditions.push(`s.created_at <= $${paramIndex}`)
     params.push(end_date)
     paramIndex++
   }
 
   if (product_id) {
-    whereConditions.push(`product_id = $${paramIndex}`)
+    whereConditions.push(`s.product_id = $${paramIndex}`)
     params.push(product_id)
     paramIndex++
   }
@@ -63,12 +63,12 @@ export async function listSales({ page = 1, limit = 10, start_date, end_date, pr
   const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
 
   const result = await query(`
-    SELECT s.*, p.sku, p.category, u.username as sold_by
+    SELECT s.*, p.sku, p.category, u.name as sold_by
     FROM sales s
     LEFT JOIN products p ON s.product_id = p.id
     LEFT JOIN users u ON s.created_by = u.id
     ${whereClause}
-    ORDER BY s.sale_date DESC
+    ORDER BY s.created_at DESC
     LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
   `, [...params, limit, offset])
 
@@ -89,7 +89,7 @@ export async function listSales({ page = 1, limit = 10, start_date, end_date, pr
 
 export async function getSaleById(id) {
   const result = await query(`
-    SELECT s.*, p.sku, p.category, u.username as sold_by
+    SELECT s.*, p.sku, p.category, u.name as sold_by
     FROM sales s
     LEFT JOIN products p ON s.product_id = p.id
     LEFT JOIN users u ON s.created_by = u.id
@@ -117,7 +117,7 @@ export async function getSalesStats() {
 export async function getDailySalesStats(days = 30) {
   const result = await query(`
     SELECT 
-      DATE(sale_date) as sale_date,
+      DATE(created_at) as created_at,
       COUNT(*) as sales_count,
       SUM(total_amount) as daily_revenue,
       SUM(total_profit) as daily_profit,
@@ -125,9 +125,9 @@ export async function getDailySalesStats(days = 30) {
       AVG(profit_margin_percentage) as avg_profit_margin,
       SUM(total_amount) - SUM(total_profit) as daily_cost
     FROM sales
-    WHERE sale_date >= CURRENT_DATE - INTERVAL '30 days'
-    GROUP BY DATE(sale_date)
-    ORDER BY sale_date DESC
+    WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+    GROUP BY DATE(created_at)
+    ORDER BY created_at DESC
   `)
   return result.rows
 }
@@ -135,15 +135,15 @@ export async function getDailySalesStats(days = 30) {
 export async function getHourlySalesPattern() {
   const result = await query(`
     SELECT 
-      EXTRACT(HOUR FROM sale_date) as hour,
+      EXTRACT(HOUR FROM created_at) as hour,
       COUNT(*) as sales_count,
       SUM(total_amount) as revenue,
       SUM(total_profit) as profit,
       AVG(total_amount) as avg_sale_amount,
       AVG(profit_margin_percentage) as avg_profit_margin
     FROM sales
-    WHERE sale_date >= CURRENT_DATE - INTERVAL '30 days'
-    GROUP BY EXTRACT(HOUR FROM sale_date)
+    WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+    GROUP BY EXTRACT(HOUR FROM created_at)
     ORDER BY hour
   `)
   return result.rows
@@ -152,7 +152,7 @@ export async function getHourlySalesPattern() {
 export async function getMonthlyTrends() {
   const result = await query(`
     SELECT 
-      DATE_TRUNC('month', sale_date) as month,
+      DATE_TRUNC('month', created_at) as month,
       COUNT(*) as sales_count,
       SUM(total_amount) as revenue,
       SUM(total_profit) as profit,
@@ -161,8 +161,8 @@ export async function getMonthlyTrends() {
       AVG(profit_margin_percentage) as avg_profit_margin,
       SUM(total_amount) - SUM(total_profit) as total_cost
     FROM sales
-    WHERE sale_date >= CURRENT_DATE - INTERVAL '12 months'
-    GROUP BY DATE_TRUNC('month', sale_date)
+    WHERE created_at >= CURRENT_DATE - INTERVAL '12 months'
+    GROUP BY DATE_TRUNC('month', created_at)
     ORDER BY month DESC
   `)
   return result.rows
@@ -180,7 +180,7 @@ export async function getLowStockAlerts() {
       COALESCE(SUM(s.quantity), 0) as total_sold,
       COUNT(s.id) as sales_count
     FROM products p
-    LEFT JOIN sales s ON p.id = s.product_id AND s.sale_date >= CURRENT_DATE - INTERVAL '30 days'
+    LEFT JOIN sales s ON p.id = s.product_id AND s.created_at >= CURRENT_DATE - INTERVAL '30 days'
     WHERE p.available_quantity <= COALESCE(p.minimum_quantity, 5) OR p.available_quantity <= 5
     GROUP BY p.id, p.name, p.sku, p.category, p.available_quantity, p.minimum_quantity
     ORDER BY p.available_quantity ASC
@@ -236,18 +236,17 @@ export async function getCashierPerformance() {
     SELECT 
       u.id,
       u.name,
-      u.username,
       COUNT(s.id) as total_sales,
       SUM(s.quantity) as items_sold,
       SUM(s.total_amount) as total_revenue,
       SUM(s.total_profit) as total_profit,
       AVG(s.total_amount) as avg_sale_amount,
       AVG(s.profit_margin_percentage) as avg_profit_margin,
-      DATE(MIN(s.sale_date)) as first_sale_date,
-      DATE(MAX(s.sale_date)) as last_sale_date
+      DATE(MIN(s.created_at)) as first_created_at,
+      DATE(MAX(s.created_at)) as last_created_at
     FROM sales s
     JOIN users u ON s.created_by = u.id
-    GROUP BY u.id, u.name, u.username
+    GROUP BY u.id, u.name
     ORDER BY total_revenue DESC
   `)
   return result.rows
@@ -257,15 +256,15 @@ export async function getCashierPerformance() {
 export async function getProfitAnalysis(days = 30) {
   const result = await query(`
     SELECT 
-      DATE(sale_date) as date,
+      DATE(created_at) as date,
       SUM(total_amount) as revenue,
       SUM(total_profit) as profit,
       SUM(total_amount) - SUM(total_profit) as cost,
       AVG(profit_margin_percentage) as avg_profit_margin,
       COUNT(*) as transactions
     FROM sales
-    WHERE sale_date >= CURRENT_DATE - INTERVAL '${days} days'
-    GROUP BY DATE(sale_date)
+    WHERE created_at >= CURRENT_DATE - INTERVAL '${days} days'
+    GROUP BY DATE(created_at)
     ORDER BY date DESC
   `)
   return result.rows
@@ -314,15 +313,15 @@ export async function getMostProfitableCategories() {
 export async function getProfitTrends(months = 12) {
   const result = await query(`
     SELECT 
-      DATE_TRUNC('month', sale_date) as month,
+      DATE_TRUNC('month', created_at) as month,
       SUM(total_amount) as revenue,
       SUM(total_profit) as profit,
       SUM(total_amount) - SUM(total_profit) as cost,
       AVG(profit_margin_percentage) as avg_profit_margin,
       COUNT(*) as transactions
     FROM sales
-    WHERE sale_date >= CURRENT_DATE - INTERVAL '${months} months'
-    GROUP BY DATE_TRUNC('month', sale_date)
+    WHERE created_at >= CURRENT_DATE - INTERVAL '${months} months'
+    GROUP BY DATE_TRUNC('month', created_at)
     ORDER BY month DESC
   `)
   return result.rows

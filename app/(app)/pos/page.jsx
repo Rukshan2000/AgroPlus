@@ -1,13 +1,14 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ShoppingCart, CheckCircle, LogOut } from 'lucide-react'
+import { ShoppingCart, CheckCircle, LogOut, Undo2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useSession } from '@/hooks/use-session'
 import ProductInput from '@/components/pos/ProductInput'
 import Cart from '@/components/pos/Cart'
 import Receipt from '@/components/pos/Receipt'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
+import POSReturnModal from '@/components/pos-return-modal'
 import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
 import offlineProductModel from '@/models/offlineProductModel'
@@ -28,6 +29,7 @@ export default function POSSystem() {
   const [sessionTime, setSessionTime] = useState(0) // Timer state
   const [showPriceVariationModal, setShowPriceVariationModal] = useState(false)
   const [selectedProductForVariation, setSelectedProductForVariation] = useState(null)
+  const [showReturnModal, setShowReturnModal] = useState(false)
   const { toast } = useToast()
   const { session } = useSession()
 
@@ -447,6 +449,15 @@ export default function POSSystem() {
     }
   }
 
+  // Handle return success - reload products
+  const handleReturnSuccess = () => {
+    loadProducts()
+    toast({
+      title: "Return Processed",
+      description: "Inventory has been updated",
+    })
+  }
+
   // Keyboard shortcuts for faster operation
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -504,6 +515,17 @@ export default function POSSystem() {
           <div className="flex items-center gap-4">
             {/* Connection Status */}
             <ConnectionStatusBadge />
+            
+            {/* Returns Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowReturnModal(true)}
+              className="flex items-center gap-2"
+            >
+              <Undo2 className="h-4 w-4" />
+              Returns
+            </Button>
             
             {/* Session Timer for Cashiers */}
             {isCashier && (
@@ -1116,6 +1138,13 @@ export default function POSSystem() {
         }}
         product={selectedProductForVariation}
         onVariationSelect={handleVariationSelect}
+      />
+
+      {/* Returns Modal */}
+      <POSReturnModal
+        isOpen={showReturnModal}
+        onClose={() => setShowReturnModal(false)}
+        onSuccess={handleReturnSuccess}
       />
     </div>
   )
