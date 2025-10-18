@@ -1,4 +1,5 @@
 import { query } from "../lib/db"
+import { bulkCreatePriceVariations } from "./priceVariationModel"
 
 export async function findProductById(id) {
   const result = await query(
@@ -156,6 +157,33 @@ export async function updateProduct(id, {
 export async function deleteProduct(id) {
   const result = await query('DELETE FROM products WHERE id = $1 RETURNING *', [id])
   return result.rows[0] || null
+}
+
+export async function bulkDeleteProducts(ids) {
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return { deleted: [], failed: [] }
+  }
+
+  const results = {
+    deleted: [],
+    failed: []
+  }
+
+  // Delete products one by one to handle any constraints
+  for (const id of ids) {
+    try {
+      const deleted = await deleteProduct(id)
+      if (deleted) {
+        results.deleted.push(deleted)
+      } else {
+        results.failed.push({ id, error: 'Product not found' })
+      }
+    } catch (error) {
+      results.failed.push({ id, error: error.message })
+    }
+  }
+
+  return results
 }
 
 export function getAvailableUnits() {
@@ -424,4 +452,118 @@ export async function updateProductExpiry(id, {
   `, params)
   
   return result.rows[0] || null
+}
+
+// Bulk create products
+export async function bulkCreateProducts(products, created_by) {
+  const results = {
+    success: [],
+    failed: []
+  }
+
+  for (const product of products) {
+    try {
+      // Check if SKU exists
+      if (product.sku) {
+        const existing = await findProductBySku(product.sku)
+        if (existing) {
+          results.failed.push({
+            product,
+            error: `SKU ${product.sku} already exists`
+          })
+          continue
+        }
+      }
+
+      // Extract price variations if they exist
+      const priceVariations = product.price_variations || []
+      delete product.price_variations
+
+      const created = await createProduct({
+        ...product,
+        created_by
+      })
+      
+      // Create price variations if provided
+      if (priceVariations.length > 0) {
+        await bulkCreatePriceVariations(created.id, priceVariations, created_by)
+      }
+      
+      results.success.push(created)
+    } catch (error) {
+      results.failed.push({
+        product,
+        error: error.message
+      })
+    }
+  }
+
+  return results
+}
+
+// Get all products for export
+export async function getAllProductsForExport() {
+  const result = await query(`
+    SELECT 
+      p.id,
+      p.name,
+      p.description,
+      p.sku,
+      p.category,
+      p.buying_price,
+      p.selling_price,
+      p.price,
+      p.stock_quantity,
+      p.unit_type,
+      p.unit_value,
+      p.minimum_quantity,
+      p.alert_before_days,
+      p.expiry_date,
+      p.manufacture_date,
+      p.is_active,
+      p.image_url
+    FROM products p
+    ORDER BY p.name ASC
+  `)
+  
+  // Get price variations for all products
+  const productIds = result.rows.map(p => p.id)
+  let variations = []
+  
+  if (productIds.length > 0) {
+    const variationsResult = await query(`
+      SELECT 
+        product_id,
+        variant_name,
+        price,
+        buying_price,
+        is_default,
+        is_active,
+        stock_quantity,
+        sku_suffix,
+        description,
+        sort_order
+      FROM product_price_variations
+      WHERE product_id = ANY($1)
+      ORDER BY product_id, sort_order ASC, is_default DESC
+    `, [productIds])
+    variations = variationsResult.rows
+  }
+  
+  // Group variations by product_id
+  const variationsByProduct = {}
+  variations.forEach(v => {
+    if (!variationsByProduct[v.product_id]) {
+      variationsByProduct[v.product_id] = []
+    }
+    variationsByProduct[v.product_id].push(v)
+  })
+  
+  // Add variations to products
+  const productsWithVariations = result.rows.map(product => ({
+    ...product,
+    price_variations: variationsByProduct[product.id] || []
+  }))
+  
+  return productsWithVariations
 }

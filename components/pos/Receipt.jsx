@@ -11,7 +11,8 @@ export default function Receipt({
   onClose,
   cart,
   onPrint,
-  onNewSale
+  onNewSale,
+  saleId
 }) {
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
   const tax = subtotal * 0.08
@@ -27,7 +28,10 @@ export default function Receipt({
         </DialogHeader>
         
         <div className="text-center mb-4 text-sm text-gray-600 dark:text-gray-400">
-          <p>POS System</p>
+          <p className="font-bold text-gray-900 dark:text-gray-100">AgroPlus</p>
+          {saleId && (
+            <p className="text-xs mt-1">Sale ID: <span className="font-mono font-bold">{saleId}</span></p>
+          )}
           <p>{new Date().toLocaleString()}</p>
         </div>
         

@@ -1,17 +1,20 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, Trash2, Plus, Search, QrCode, Package } from "lucide-react"
+import { Pencil, Trash2, Plus, Search, QrCode, Package, Upload, Download, Trash } from "lucide-react"
 import AddProductModal from "./add-product-modal"
 import DeleteProductModal from "./delete-product-modal"
 import RestockProductModal from "./restock-product-modal"
 import BarcodeSticker from "./barcode-sticker"
 import BulkBarcodeSticker from "./bulk-barcode-sticker"
+import Papa from "papaparse"
+import { useToast } from "@/hooks/use-toast"
 
 export default function ProductsTable({ initialProducts = [], initialCategories = [] }) {
   const [products, setProducts] = useState(initialProducts)
@@ -20,6 +23,12 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
   const [loading, setLoading] = useState(false)
+  const fileInputRef = useRef(null)
+  const { toast } = useToast()
+  
+  // Selection state for bulk operations
+  const [selectedProducts, setSelectedProducts] = useState(new Set())
+  const [selectAll, setSelectAll] = useState(false)
   
   // Modal states
   const [addModalOpen, setAddModalOpen] = useState(false)
@@ -43,6 +52,96 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
 
     return matchesSearch && matchesCategory && matchesStatus
   })
+
+  // Handle select all
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedProducts(new Set())
+      setSelectAll(false)
+    } else {
+      const allIds = new Set(filteredProducts.map(p => p.id))
+      setSelectedProducts(allIds)
+      setSelectAll(true)
+    }
+  }
+
+  // Handle individual selection
+  const handleSelectProduct = (productId) => {
+    const newSelected = new Set(selectedProducts)
+    if (newSelected.has(productId)) {
+      newSelected.delete(productId)
+    } else {
+      newSelected.add(productId)
+    }
+    setSelectedProducts(newSelected)
+    setSelectAll(newSelected.size === filteredProducts.length)
+  }
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (selectedProducts.size === 0) {
+      toast({
+        title: "No Selection",
+        description: "Please select products to delete",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedProducts.size} product(s)? This action cannot be undone.`)) {
+      return
+    }
+
+    setLoading(true)
+    try {
+      const csrf = await fetch("/api/auth/csrf")
+      const csrfData = await csrf.json()
+      const token = csrfData.csrfToken || csrfData.token
+
+      const response = await fetch("/api/products/bulk-delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": token,
+        },
+        body: JSON.stringify({ product_ids: Array.from(selectedProducts) }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete products")
+      }
+
+      // Remove deleted products from state
+      setProducts(prev => prev.filter(p => !selectedProducts.has(p.id)))
+      setSelectedProducts(new Set())
+      setSelectAll(false)
+
+      toast({
+        title: "Success",
+        description: data.message,
+      })
+
+      if (data.failed && data.failed.length > 0) {
+        console.log("Failed deletions:", data.failed)
+        toast({
+          title: "Partial Success",
+          description: `${data.failedCount} product(s) could not be deleted`,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Bulk delete error:", error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete products",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function deleteProduct(productId) {
     setLoading(true)
@@ -102,6 +201,262 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
     setBulkBarcodeModalOpen(true)
   }
 
+  const handleExportCSV = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch("/api/products/export")
+      
+      if (!response.ok) {
+        throw new Error("Failed to export products")
+      }
+
+      const data = await response.json()
+      
+      // Convert to CSV
+      const csv = Papa.unparse(data.products)
+      
+      // Create download link
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `products_export_${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast({
+        title: "Success",
+        description: `Exported ${data.products.length} products to CSV`,
+      })
+    } catch (error) {
+      console.error("Export error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to export products",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleImportCSV = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      setLoading(true)
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+          try {
+            const csrf = await fetch("/api/auth/csrf")
+            const csrfData = await csrf.json()
+            const token = csrfData.csrfToken || csrfData.token
+
+            const response = await fetch("/api/products/import", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": token,
+              },
+              body: JSON.stringify({ products: results.data }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+              if (data.validationErrors) {
+                toast({
+                  title: "Validation Errors",
+                  description: `${data.failedCount} rows have errors. Check console for details.`,
+                  variant: "destructive",
+                })
+                console.error("Validation errors:", data.validationErrors)
+              } else {
+                throw new Error(data.error || "Failed to import products")
+              }
+            } else {
+              toast({
+                title: "Import Successful",
+                description: `Successfully imported ${data.successCount} products. ${data.failedCount} failed.`,
+              })
+
+              if (data.failed && data.failed.length > 0) {
+                console.log("Failed imports:", data.failed)
+              }
+
+              // Refresh products list
+              const productsResponse = await fetch("/api/products?limit=100")
+              const productsData = await productsResponse.json()
+              setProducts(productsData.products)
+            }
+          } catch (error) {
+            console.error("Import error:", error)
+            toast({
+              title: "Error",
+              description: error.message || "Failed to import products",
+              variant: "destructive",
+            })
+          } finally {
+            setLoading(false)
+            // Reset file input
+            if (fileInputRef.current) {
+              fileInputRef.current.value = ''
+            }
+          }
+        },
+        error: (error) => {
+          console.error("CSV parse error:", error)
+          toast({
+            title: "Error",
+            description: "Failed to parse CSV file",
+            variant: "destructive",
+          })
+          setLoading(false)
+        }
+      })
+    } catch (error) {
+      console.error("File handling error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to process file",
+        variant: "destructive",
+      })
+      setLoading(false)
+    }
+  }
+
+  const handleDownloadTemplate = () => {
+    const template = [
+      {
+        name: "Rice - Basmati",
+        description: "Premium quality basmati rice",
+        sku: "RICE-001",
+        category: "Grains",
+        buying_price: "100.00",
+        selling_price: "150.00",
+        price: "150.00",
+        stock_quantity: "50",
+        unit_type: "kg",
+        unit_value: "1.0",
+        minimum_quantity: "5",
+        alert_before_days: "7",
+        expiry_date: "",
+        manufacture_date: "",
+        is_active: "true",
+        image_url: "",
+        // Variation 1: Small pack
+        variant_1_name: "Small (500g)",
+        variant_1_price: "75",
+        variant_1_buying_price: "50",
+        variant_1_stock: "100",
+        variant_1_sku_suffix: "500G",
+        variant_1_is_default: "yes",
+        // Variation 2: Medium pack
+        variant_2_name: "Medium (1kg)",
+        variant_2_price: "150",
+        variant_2_buying_price: "100",
+        variant_2_stock: "50",
+        variant_2_sku_suffix: "1KG",
+        variant_2_is_default: "",
+        // Variation 3: Large pack
+        variant_3_name: "Large (5kg)",
+        variant_3_price: "700",
+        variant_3_buying_price: "480",
+        variant_3_stock: "20",
+        variant_3_sku_suffix: "5KG",
+        variant_3_is_default: "",
+        // Empty variations 4 & 5
+        variant_4_name: "",
+        variant_4_price: "",
+        variant_4_buying_price: "",
+        variant_4_stock: "",
+        variant_4_sku_suffix: "",
+        variant_4_is_default: "",
+        variant_5_name: "",
+        variant_5_price: "",
+        variant_5_buying_price: "",
+        variant_5_stock: "",
+        variant_5_sku_suffix: "",
+        variant_5_is_default: ""
+      },
+      {
+        name: "Coconut Oil",
+        description: "Pure coconut oil - no variations",
+        sku: "OIL-001",
+        category: "Oils",
+        buying_price: "200.00",
+        selling_price: "250.00",
+        price: "250.00",
+        stock_quantity: "30",
+        unit_type: "l",
+        unit_value: "1.0",
+        minimum_quantity: "10",
+        alert_before_days: "7",
+        expiry_date: "",
+        manufacture_date: "",
+        is_active: "true",
+        image_url: "",
+        // No variations for this product
+        variant_1_name: "",
+        variant_1_price: "",
+        variant_1_buying_price: "",
+        variant_1_stock: "",
+        variant_1_sku_suffix: "",
+        variant_1_is_default: "",
+        variant_2_name: "",
+        variant_2_price: "",
+        variant_2_buying_price: "",
+        variant_2_stock: "",
+        variant_2_sku_suffix: "",
+        variant_2_is_default: "",
+        variant_3_name: "",
+        variant_3_price: "",
+        variant_3_buying_price: "",
+        variant_3_stock: "",
+        variant_3_sku_suffix: "",
+        variant_3_is_default: "",
+        variant_4_name: "",
+        variant_4_price: "",
+        variant_4_buying_price: "",
+        variant_4_stock: "",
+        variant_4_sku_suffix: "",
+        variant_4_is_default: "",
+        variant_5_name: "",
+        variant_5_price: "",
+        variant_5_buying_price: "",
+        variant_5_stock: "",
+        variant_5_sku_suffix: "",
+        variant_5_is_default: ""
+      }
+    ]
+
+    const csv = Papa.unparse(template)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', 'products_import_template.csv')
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    toast({
+      title: "Template Downloaded",
+      description: "Easy format - just fill in the columns for each price variation",
+    })
+  }
+
   const handleProductSuccess = (product, action) => {
     if (action === 'created') {
       setProducts(prev => [product, ...prev])
@@ -132,8 +487,37 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Products</CardTitle>
+        <CardTitle>
+          Products
+          {selectedProducts.size > 0 && (
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              ({selectedProducts.size} selected)
+            </span>
+          )}
+        </CardTitle>
         <div className="flex gap-2">
+          {selectedProducts.size > 0 && (
+            <Button 
+              variant="destructive" 
+              onClick={handleBulkDelete} 
+              disabled={loading}
+            >
+              <Trash className="h-4 w-4 mr-2" />
+              Delete ({selectedProducts.size})
+            </Button>
+          )}
+          <Button variant="outline" onClick={handleDownloadTemplate} disabled={loading}>
+            <Download className="h-4 w-4 mr-2" />
+            CSV Template
+          </Button>
+          <Button variant="outline" onClick={handleImportCSV} disabled={loading}>
+            <Upload className="h-4 w-4 mr-2" />
+            Import CSV
+          </Button>
+          <Button variant="outline" onClick={handleExportCSV} disabled={loading}>
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
           <Button variant="outline" onClick={handleBulkBarcodeSticker}>
             <QrCode className="h-4 w-4 mr-2" />
             Bulk Barcodes
@@ -145,6 +529,15 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
         </div>
       </CardHeader>
       <CardContent>
+        {/* Hidden file input for CSV import */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv"
+          onChange={handleFileChange}
+          style={{ display: 'none' }}
+        />
+        
         {/* Filters */}
         <div className="flex gap-4 mb-6">
           <div className="relative flex-1">
@@ -183,7 +576,14 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
 
         {/* Products Table */}
         <div className="grid gap-2">
-          <div className="grid grid-cols-9 text-xs font-medium text-muted-foreground">
+          <div className="grid grid-cols-10 text-xs font-medium text-muted-foreground">
+            <div className="flex items-center">
+              <Checkbox
+                checked={selectAll}
+                onCheckedChange={handleSelectAll}
+                aria-label="Select all"
+              />
+            </div>
             <div>Name</div>
             <div>SKU</div>
             <div>Category</div>
@@ -200,7 +600,14 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             </div>
           ) : (
             filteredProducts.map((product) => (
-              <div key={product.id} className="grid grid-cols-9 items-center py-3 border-b last:border-b-0">
+              <div key={product.id} className="grid grid-cols-10 items-center py-3 border-b last:border-b-0">
+                <div className="flex items-center">
+                  <Checkbox
+                    checked={selectedProducts.has(product.id)}
+                    onCheckedChange={() => handleSelectProduct(product.id)}
+                    aria-label={`Select ${product.name}`}
+                  />
+                </div>
                 <div>
                   <div className="font-medium">{product.name}</div>
                   {product.description && (

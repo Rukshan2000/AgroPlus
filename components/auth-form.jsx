@@ -158,10 +158,10 @@ export default function AuthForm({ mode = "login" }) {
           <div className="text-sm text-center text-muted-foreground">
             {isLogin ? (
               <span>
-                New here?{" "}
-                <Link className="underline" href="/register">
+                {/* New here?{" "} */}
+                {/* <Link className="underline" href="/register">
                   Register
-                </Link>
+                </Link> */}
               </span>
             ) : (
               <span>

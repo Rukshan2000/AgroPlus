@@ -10,7 +10,10 @@ import {
   restockProduct,
   getRestockHistory,
   getProductsWithAlerts,
-  getProductsExpiringSoon
+  getProductsExpiringSoon,
+  bulkCreateProducts,
+  getAllProductsForExport,
+  bulkDeleteProducts
 } from "../models/productModel"
 import { getActiveCategoryNames } from "../models/categoryModel"
 import { validateCsrf } from "../lib/csrf"
@@ -212,6 +215,54 @@ export async function remove(request, { params }) {
   return NextResponse.json({ message: "Product deleted successfully" })
 }
 
+export async function bulkDelete(request) {
+  const session = await getSession()
+  try {
+    requireRoleOrThrow(session, ["admin", "manager"])
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: e.status || 403 })
+  }
+
+  if (!(await validateCsrf(request.headers))) {
+    return NextResponse.json({ error: "Invalid CSRF token" }, { status: 403 })
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}))
+    const { product_ids } = body
+
+    if (!product_ids || !Array.isArray(product_ids) || product_ids.length === 0) {
+      return NextResponse.json({ 
+        error: "Invalid request. product_ids array is required." 
+      }, { status: 400 })
+    }
+
+    // Validate all IDs are integers
+    const validIds = product_ids.filter(id => Number.isInteger(Number(id))).map(id => Number(id))
+    
+    if (validIds.length === 0) {
+      return NextResponse.json({ 
+        error: "No valid product IDs provided" 
+      }, { status: 400 })
+    }
+
+    const results = await bulkDeleteProducts(validIds)
+
+    return NextResponse.json({
+      message: `Successfully deleted ${results.deleted.length} products`,
+      deletedCount: results.deleted.length,
+      failedCount: results.failed.length,
+      deleted: results.deleted.map(p => p.id),
+      failed: results.failed
+    })
+  } catch (error) {
+    console.error("Bulk delete error:", error)
+    return NextResponse.json({ 
+      error: "Failed to delete products" 
+    }, { status: 500 })
+  }
+}
+
 export async function categories() {
   const session = await getSession()
   try {
@@ -393,3 +444,203 @@ export async function expiringProducts(request) {
     }, { status: 500 })
   }
 }
+
+// Import products from CSV
+export async function importCsv(request) {
+  const session = await getSession()
+  try {
+    requireRoleOrThrow(session, ["admin", "manager"])
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: e.status || 403 })
+  }
+
+  if (!(await validateCsrf(request.headers))) {
+    return NextResponse.json({ error: "Invalid CSRF token" }, { status: 403 })
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}))
+    const { products } = body
+
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return NextResponse.json({ 
+        error: "Invalid CSV data. Products array is required." 
+      }, { status: 400 })
+    }
+
+    // Validate and parse each product
+    const parsedProducts = []
+    const validationErrors = []
+
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i]
+      const rowNum = i + 2 // +2 because CSV has header row and is 1-indexed
+
+      try {
+        // Parse price variations from flat columns (variant_1_name, variant_1_price, etc.)
+        const priceVariations = []
+        
+        for (let varNum = 1; varNum <= 5; varNum++) {
+          const variantName = product[`variant_${varNum}_name`]?.trim()
+          const variantPrice = product[`variant_${varNum}_price`]
+          
+          // If variant name exists, create the variation
+          if (variantName) {
+            const variation = {
+              variant_name: variantName,
+              price: parseFloat(variantPrice) || 0,
+              buying_price: parseFloat(product[`variant_${varNum}_buying_price`]) || 0,
+              stock_quantity: parseInt(product[`variant_${varNum}_stock`]) || 0,
+              sku_suffix: product[`variant_${varNum}_sku_suffix`]?.trim() || null,
+              description: null,
+              sort_order: varNum - 1,
+              is_default: (product[`variant_${varNum}_is_default`]?.toLowerCase() === 'yes' || 
+                          product[`variant_${varNum}_is_default`]?.toLowerCase() === 'true' ||
+                          product[`variant_${varNum}_is_default`] === '1'),
+              is_active: true
+            }
+            
+            priceVariations.push(variation)
+          }
+        }
+        
+        // If no variations have is_default set, make the first one default
+        if (priceVariations.length > 0 && !priceVariations.some(v => v.is_default)) {
+          priceVariations[0].is_default = true
+        }
+
+        const parsed = productSchema.safeParse({
+          name: product.name?.trim(),
+          description: product.description?.trim() || "",
+          buying_price: parseFloat(product.buying_price) || 0,
+          selling_price: parseFloat(product.selling_price) || parseFloat(product.price) || 0,
+          sku: product.sku?.trim() || "",
+          category: product.category?.trim() || "",
+          stock_quantity: parseInt(product.stock_quantity) || 0,
+          is_active: product.is_active === 'true' || product.is_active === true || product.is_active === '1' || product.is_active === 1,
+          image_url: product.image_url?.trim() || "",
+          unit_type: product.unit_type?.trim() || 'kg',
+          unit_value: parseFloat(product.unit_value) || 1.0,
+          minimum_quantity: parseInt(product.minimum_quantity) || 5,
+          alert_before_days: parseInt(product.alert_before_days) || 7,
+          expiry_date: product.expiry_date?.trim() || null,
+          manufacture_date: product.manufacture_date?.trim() || null
+        })
+
+        if (!parsed.success) {
+          validationErrors.push({
+            row: rowNum,
+            product: product.name || 'Unknown',
+            errors: parsed.error.flatten().fieldErrors
+          })
+        } else {
+          // Add price variations to the parsed product
+          parsedProducts.push({
+            ...parsed.data,
+            price_variations: priceVariations
+          })
+        }
+      } catch (err) {
+        validationErrors.push({
+          row: rowNum,
+          product: product.name || 'Unknown',
+          errors: err.message
+        })
+      }
+    }
+
+    // If there are validation errors, return them
+    if (validationErrors.length > 0) {
+      return NextResponse.json({ 
+        error: "Validation errors found in CSV",
+        validationErrors,
+        successCount: 0,
+        failedCount: validationErrors.length
+      }, { status: 400 })
+    }
+
+    // Bulk create products
+    const results = await bulkCreateProducts(parsedProducts, session.user.id)
+
+    return NextResponse.json({
+      message: `Successfully imported ${results.success.length} products`,
+      successCount: results.success.length,
+      failedCount: results.failed.length,
+      failed: results.failed,
+      success: results.success
+    })
+  } catch (error) {
+    console.error("Import CSV error:", error)
+    return NextResponse.json({ 
+      error: "Failed to import products from CSV" 
+    }, { status: 500 })
+  }
+}
+
+// Export products to CSV
+export async function exportCsv(request) {
+  const session = await getSession()
+  try {
+    requireRoleOrThrow(session, ["admin", "manager", "user"])
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: e.status || 403 })
+  }
+
+  try {
+    const products = await getAllProductsForExport()
+    
+    // Format products for CSV export with flattened price variations
+    const csvData = products.map(product => {
+      const row = {
+        name: product.name,
+        description: product.description || '',
+        sku: product.sku || '',
+        category: product.category || '',
+        buying_price: product.buying_price || 0,
+        selling_price: product.selling_price || product.price || 0,
+        price: product.price || product.selling_price || 0,
+        stock_quantity: product.stock_quantity || 0,
+        unit_type: product.unit_type || 'kg',
+        unit_value: product.unit_value || 1.0,
+        minimum_quantity: product.minimum_quantity || 5,
+        alert_before_days: product.alert_before_days || 7,
+        expiry_date: product.expiry_date || '',
+        manufacture_date: product.manufacture_date || '',
+        is_active: product.is_active ? 'true' : 'false',
+        image_url: product.image_url || ''
+      }
+
+      // Add up to 5 price variations as flat columns
+      for (let i = 0; i < 5; i++) {
+        const variation = product.price_variations[i]
+        const num = i + 1
+        
+        if (variation) {
+          row[`variant_${num}_name`] = variation.variant_name || ''
+          row[`variant_${num}_price`] = variation.price || ''
+          row[`variant_${num}_buying_price`] = variation.buying_price || ''
+          row[`variant_${num}_stock`] = variation.stock_quantity || ''
+          row[`variant_${num}_sku_suffix`] = variation.sku_suffix || ''
+          row[`variant_${num}_is_default`] = variation.is_default ? 'yes' : ''
+        } else {
+          row[`variant_${num}_name`] = ''
+          row[`variant_${num}_price`] = ''
+          row[`variant_${num}_buying_price`] = ''
+          row[`variant_${num}_stock`] = ''
+          row[`variant_${num}_sku_suffix`] = ''
+          row[`variant_${num}_is_default`] = ''
+        }
+      }
+
+      return row
+    })
+
+    return NextResponse.json({ products: csvData })
+  } catch (error) {
+    console.error("Export CSV error:", error)
+    return NextResponse.json({ 
+      error: "Failed to export products to CSV" 
+    }, { status: 500 })
+  }
+}
+

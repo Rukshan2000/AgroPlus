@@ -7,6 +7,7 @@ import { useSession } from '@/hooks/use-session'
 import ProductInput from '@/components/pos/ProductInput'
 import Cart from '@/components/pos/Cart'
 import Receipt from '@/components/pos/Receipt'
+import ThermalReceipt from '@/components/pos/ThermalReceipt'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
 import POSReturnModal from '@/components/pos-return-modal'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,7 @@ export default function POSSystem() {
   const [showPriceVariationModal, setShowPriceVariationModal] = useState(false)
   const [selectedProductForVariation, setSelectedProductForVariation] = useState(null)
   const [showReturnModal, setShowReturnModal] = useState(false)
+  const [saleId, setSaleId] = useState(null) // Store sale ID for receipt
   const { toast } = useToast()
   const { session } = useSession()
 
@@ -346,12 +348,57 @@ export default function POSSystem() {
   const total = subtotal + tax
 
   const printBill = () => {
-    window.print()
+    // Open thermal receipt in new window
+    const printWindow = window.open('', '_blank', 'width=302,height=600')
+    
+    if (printWindow) {
+      const receiptContent = document.getElementById('thermal-receipt')
+      
+      if (receiptContent) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Print Receipt - Sale #${saleId || 'N/A'}</title>
+              <style>
+                @media print {
+                  @page {
+                    size: 80mm auto;
+                    margin: 0;
+                  }
+                  body {
+                    margin: 0;
+                    padding: 0;
+                  }
+                }
+                body {
+                  margin: 0;
+                  padding: 0;
+                  font-family: monospace;
+                }
+              </style>
+            </head>
+            <body>
+              ${receiptContent.innerHTML}
+            </body>
+          </html>
+        `)
+        printWindow.document.close()
+        
+        // Wait for content to load then print
+        setTimeout(() => {
+          printWindow.focus()
+          printWindow.print()
+          printWindow.close()
+        }, 250)
+      }
+    }
   }
 
   const clearCart = () => {
     setCart([])
     setShowBill(false)
+    setSaleId(null)
     toast({
       title: "Cart cleared",
       description: "All items removed from cart"
@@ -408,6 +455,9 @@ export default function POSSystem() {
         
         await offlineProductModel.bulkUpdateStock(stockUpdates);
         
+        // Set sale ID from offline result
+        const offlineSaleId = offlineResult.sale && offlineResult.sale._id ? offlineResult.sale._id : `OFF-${Date.now()}`
+        setSaleId(offlineSaleId)
         setShowBill(true);
         toast({
           title: "Sale completed",
@@ -427,6 +477,10 @@ export default function POSSystem() {
         });
 
         if (response.ok) {
+          const result = await response.json();
+          // Set sale ID from API response - use first sale ID or generate one
+          const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
+          setSaleId(firstSaleId || `SALE-${Date.now()}`)
           setShowBill(true);
           toast({
             title: "Sale completed",
@@ -1125,9 +1179,15 @@ export default function POSSystem() {
         isOpen={showBill}
         onClose={setShowBill}
         cart={cart}
+        saleId={saleId}
         onPrint={printBill}
         onNewSale={handleNewSale}
       />
+
+      {/* Hidden Thermal Receipt for Printing */}
+      <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
+        <ThermalReceipt cart={cart} saleId={saleId} />
+      </div>
 
       {/* Price Variation Modal */}
       <PriceVariationModal
