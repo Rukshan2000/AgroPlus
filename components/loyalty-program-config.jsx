@@ -230,7 +230,7 @@ export function LoyaltyProgramConfig() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="points_per_dollar">Points per Dollar</Label>
+                <Label htmlFor="points_per_dollar">Points per LKR</Label>
                 <Input
                   id="points_per_dollar"
                   type="number"
@@ -240,6 +240,7 @@ export function LoyaltyProgramConfig() {
                   value={selectedProgram.points_per_dollar}
                   onChange={(e) => handleFieldChange('points_per_dollar', parseFloat(e.target.value))}
                 />
+                <p className="text-xs text-muted-foreground">How many points customers earn for every LKR spent</p>
               </div>
             </div>
 
@@ -304,7 +305,7 @@ export function LoyaltyProgramConfig() {
           </CardHeader>
           <CardContent className="space-y-2">
             <p><strong>Name:</strong> {selectedProgram.name || 'Unnamed Program'}</p>
-            <p><strong>Earning Rate:</strong> {selectedProgram.points_per_dollar} points per $1 spent</p>
+            <p><strong>Earning Rate:</strong> {selectedProgram.points_per_dollar} points per LKR spent</p>
             <p><strong>Signup Bonus:</strong> {selectedProgram.signup_bonus} points</p>
             <p><strong>Minimum Redemption:</strong> {selectedProgram.min_redemption_threshold} points</p>
             <p><strong>Status:</strong> {selectedProgram.is_active ? 'Active' : 'Inactive'}</p>

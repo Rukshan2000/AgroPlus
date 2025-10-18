@@ -18,7 +18,8 @@ export async function findAllCustomersPaginated({ page = 1, limit = 20, search =
       (c.first_name ILIKE $${params.length + 1} OR 
        c.last_name ILIKE $${params.length + 1} OR 
        c.email ILIKE $${params.length + 1} OR 
-       c.phone ILIKE $${params.length + 1})
+       c.phone ILIKE $${params.length + 1} OR
+       c.loyalty_card_number ILIKE $${params.length + 1})
     `)
     params.push(`%${search}%`)
   }

@@ -13,8 +13,9 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from '@/components/ui/dialog'
-import { Search, UserPlus, Star, X } from 'lucide-react'
-import { CustomerFormModal } from './customer-form-modal'
+import { Search, UserPlus, Star, X, CreditCard } from 'lucide-react'
+import { CustomerFormModal } from '@/components/customer-form-modal'
+import { QuickCustomerRegistration } from './quick-customer-registration'
 
 export function CustomerLoyalty({ onCustomerSelect, currentCustomer, onCustomerRemove }) {
   const [searchTerm, setSearchTerm] = useState('')
@@ -22,6 +23,7 @@ export function CustomerLoyalty({ onCustomerSelect, currentCustomer, onCustomerR
   const [isSearching, setIsSearching] = useState(false)
   const [showSearchResults, setShowSearchResults] = useState(false)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showQuickRegistration, setShowQuickRegistration] = useState(false)
 
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
@@ -63,7 +65,15 @@ export function CustomerLoyalty({ onCustomerSelect, currentCustomer, onCustomerR
 
   const handleCustomerCreated = () => {
     setShowCreateModal(false)
+    setShowQuickRegistration(false)
     // Optionally refresh search or clear form
+  }
+
+  const handleQuickRegistrationComplete = (customer) => {
+    setShowQuickRegistration(false)
+    if (customer) {
+      handleCustomerSelection(customer)
+    }
   }
 
   const handleKeyPress = (e) => {
@@ -185,10 +195,19 @@ export function CustomerLoyalty({ onCustomerSelect, currentCustomer, onCustomerR
 
             {/* Quick Actions */}
             <div className="space-y-2">
+              {/* Quick Issue Card Button - Primary Action */}
+              <Button 
+                onClick={() => setShowQuickRegistration(true)}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+              >
+                <CreditCard className="mr-2 h-4 w-4" /> Issue Loyalty Card
+              </Button>
+              
+              {/* Advanced Customer Form */}
               <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="w-full">
-                    <UserPlus className="mr-2 h-4 w-4" /> New Customer
+                    <UserPlus className="mr-2 h-4 w-4" /> Advanced Registration
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
@@ -205,7 +224,7 @@ export function CustomerLoyalty({ onCustomerSelect, currentCustomer, onCustomerR
 
             {/* Info */}
             <div className="text-xs text-muted-foreground">
-              💡 Search for existing customers or create a new customer to earn loyalty points on this sale.
+              � <strong>Issue Loyalty Card</strong> for quick registration at checkout
             </div>
           </>
         )}
@@ -217,6 +236,13 @@ export function CustomerLoyalty({ onCustomerSelect, currentCustomer, onCustomerR
           </div>
         )}
       </CardContent>
+
+      {/* Quick Customer Registration Modal */}
+      <QuickCustomerRegistration 
+        isOpen={showQuickRegistration}
+        onClose={() => setShowQuickRegistration(false)}
+        onCustomerCreated={handleQuickRegistrationComplete}
+      />
     </Card>
   )
 }

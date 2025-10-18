@@ -4,12 +4,15 @@ import React, { useState, useEffect } from 'react'
 import { ShoppingCart, CheckCircle, LogOut, Undo2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useSession } from '@/hooks/use-session'
+import { useCsrf } from '@/hooks/use-csrf'
 import ProductInput from '@/components/pos/ProductInput'
 import Cart from '@/components/pos/Cart'
 import Receipt from '@/components/pos/Receipt'
 import ThermalReceipt from '@/components/pos/ThermalReceipt'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
 import POSReturnModal from '@/components/pos-return-modal'
+import { CustomerLoyalty } from '@/components/pos/customer-loyalty'
+import { RewardRedemption } from '@/components/pos/reward-redemption'
 import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
 import offlineProductModel from '@/models/offlineProductModel'
@@ -32,8 +35,13 @@ export default function POSSystem() {
   const [selectedProductForVariation, setSelectedProductForVariation] = useState(null)
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [saleId, setSaleId] = useState(null) // Store sale ID for receipt
+  const [selectedCustomer, setSelectedCustomer] = useState(null) // Customer loyalty
+  const [appliedReward, setAppliedReward] = useState(null) // Applied reward for discount
+  const [pointsEarned, setPointsEarned] = useState(0) // Points earned in last sale
+  const [pointsRedeemed, setPointsRedeemed] = useState(0) // Points redeemed in last sale
   const { toast } = useToast()
   const { session } = useSession()
+  const { csrfToken, getHeaders } = useCsrf()
 
   const handleLogout = async () => {
     try {
@@ -344,8 +352,38 @@ export default function POSSystem() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
-  const tax = subtotal * 0.08
-  const total = subtotal + tax
+  
+  // Apply reward discount if applicable
+  let rewardDiscount = 0
+  if (appliedReward && appliedReward.is_discount && appliedReward.calculatedDiscount) {
+    rewardDiscount = appliedReward.calculatedDiscount
+  }
+  
+  const subtotalAfterReward = Math.max(0, subtotal - rewardDiscount)
+  const tax = subtotalAfterReward * 0.08
+  const total = subtotalAfterReward + tax
+
+  // Customer loyalty handlers
+  const handleCustomerSelect = (customer) => {
+    setSelectedCustomer(customer)
+    toast({
+      title: "Customer Selected",
+      description: `${customer.first_name} ${customer.last_name} - ${customer.points_balance} points`,
+    })
+  }
+
+  const handleCustomerRemove = () => {
+    setSelectedCustomer(null)
+    setAppliedReward(null) // Remove reward if customer is removed
+    toast({
+      title: "Customer Removed",
+      description: "Customer has been removed from this sale",
+    })
+  }
+
+  const handleRewardApplied = (reward) => {
+    setAppliedReward(reward)
+  }
 
   const printBill = () => {
     // Open thermal receipt in new window
@@ -399,6 +437,10 @@ export default function POSSystem() {
     setCart([])
     setShowBill(false)
     setSaleId(null)
+    setSelectedCustomer(null) // Clear customer selection
+    setAppliedReward(null) // Clear applied reward
+    setPointsEarned(0) // Reset points earned
+    setPointsRedeemed(0) // Reset points redeemed
     toast({
       title: "Cart cleared",
       description: "All items removed from cart"
@@ -435,11 +477,15 @@ export default function POSSystem() {
           buying_price: item.buying_price || 0 // Include buying price for profit calculation
         })),
         subtotal,
+        reward_discount: rewardDiscount,
         tax,
         total_amount: total,
         payment_method: 'cash', // Default to cash, can be updated based on UI
         cashier_id: session?.user?.id,
-        cashier_name: session?.user?.name
+        cashier_name: session?.user?.name,
+        customer_id: selectedCustomer?.id || null, // Include customer ID for loyalty
+        reward_id: appliedReward?.id || null, // Include reward ID if applied
+        reward_points_used: appliedReward?.points_cost || 0
       }
 
       // Try offline storage first
@@ -470,21 +516,33 @@ export default function POSSystem() {
         // Fallback to API if offline storage fails
         const response = await fetch('/api/sales', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
+          headers: getHeaders(),
           body: JSON.stringify(saleData)
         });
 
         if (response.ok) {
           const result = await response.json();
+          console.log('Sale API Response:', result)
+          
           // Set sale ID from API response - use first sale ID or generate one
           const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
           setSaleId(firstSaleId || `SALE-${Date.now()}`)
+          
+          // Set loyalty points information
+          if (result.summary) {
+            setPointsEarned(result.summary.loyalty_points_awarded || 0)
+            setPointsRedeemed(result.summary.loyalty_points_redeemed || 0)
+          }
+          
           setShowBill(true);
+          
+          const loyaltyMessage = selectedCustomer 
+            ? ` | Earned ${result.summary?.loyalty_points_awarded || 0} points` 
+            : ''
+          
           toast({
             title: "Sale completed",
-            description: "Transaction processed successfully"
+            description: `Transaction processed successfully${loyaltyMessage}`
           });
           loadProducts();
         } else {
@@ -787,8 +845,9 @@ export default function POSSystem() {
 
         {/* Main Content Area */}
         <div className="grid grid-cols-12 gap-4">
-          {/* Product Grid - 8 columns */}
-          <div className="col-span-8">
+          {/* Left Column - Products & Customer Loyalty - 8 columns */}
+          <div className="col-span-8 space-y-4">
+            {/* Product Grid */}
             <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4 h-fit">
               <div className="mb-4 space-y-3">
                 {/* Search and Sort Controls */}
@@ -1054,10 +1113,29 @@ export default function POSSystem() {
                 })}
               </div>
             </div>
+
+            {/* Customer Loyalty & Rewards Section - Below Products */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Customer Loyalty Section */}
+              <CustomerLoyalty
+                onCustomerSelect={handleCustomerSelect}
+                currentCustomer={selectedCustomer}
+                onCustomerRemove={handleCustomerRemove}
+              />
+
+              {/* Reward Redemption Section */}
+              <RewardRedemption
+                customer={selectedCustomer}
+                onRewardApplied={handleRewardApplied}
+                appliedReward={appliedReward}
+                cartTotal={subtotal}
+              />
+            </div>
           </div>
 
-          {/* Cart & Checkout - 4 columns */}
-          <div className="col-span-4">
+          {/* Right Column - Cart & Checkout - 4 columns */}
+          <div className="col-span-4 space-y-4">
+            {/* Cart Section */}
             <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5" />
@@ -1138,6 +1216,12 @@ export default function POSSystem() {
                       <span className="font-semibold">Subtotal:</span>
                       <span className="font-bold">LKR {subtotal.toFixed(2)}</span>
                     </div>
+                    {rewardDiscount > 0 && (
+                      <div className="flex justify-between text-lg text-green-600 dark:text-green-400">
+                        <span className="font-semibold">Reward Discount:</span>
+                        <span className="font-bold">- LKR {rewardDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-lg">
                       <span className="font-semibold">Tax (8%):</span>
                       <span className="font-bold">LKR {tax.toFixed(2)}</span>
@@ -1182,6 +1266,10 @@ export default function POSSystem() {
         saleId={saleId}
         onPrint={printBill}
         onNewSale={handleNewSale}
+        customer={selectedCustomer}
+        rewardDiscount={rewardDiscount}
+        pointsEarned={pointsEarned}
+        pointsRedeemed={pointsRedeemed}
       />
 
       {/* Hidden Thermal Receipt for Printing */}

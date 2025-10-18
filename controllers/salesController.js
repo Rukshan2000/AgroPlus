@@ -15,7 +15,17 @@ import { query } from '../lib/db'
 export class SalesController {
   // Process a new sale transaction
   static async processSale(saleData, userId) {
-    const { items, subtotal, tax, total, customer_id, redemption_ids = [] } = saleData
+    const { 
+      items, 
+      subtotal, 
+      reward_discount = 0,
+      tax, 
+      total, 
+      customer_id, 
+      reward_id,
+      reward_points_used = 0,
+      redemption_ids = [] 
+    } = saleData
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       throw new Error('Invalid items data')
@@ -66,6 +76,20 @@ export class SalesController {
         `, [item.quantity, item.product_id])
       }
 
+      // Process reward redemption if reward was applied
+      if (reward_id && customer_id && reward_points_used > 0) {
+        try {
+          const { redeemReward } = await import('../models/rewardModel.js')
+          const redemptionResult = await redeemReward(reward_id, customer_id)
+          // Store redemption info for receipt
+          saleData.redemption_info = redemptionResult
+        } catch (rewardError) {
+          console.error('Error redeeming reward:', rewardError)
+          // Rollback if reward redemption fails
+          throw new Error(`Failed to redeem reward: ${rewardError.message}`)
+        }
+      }
+
       // Process loyalty points if customer is specified
       let loyaltyPointsAwarded = 0
       if (customer_id) {
@@ -74,7 +98,9 @@ export class SalesController {
           if (customer && customer.loyalty_program_id) {
             const program = await findLoyaltyProgramById(customer.loyalty_program_id)
             if (program && program.is_active) {
-              loyaltyPointsAwarded = Math.floor(total * program.points_per_dollar)
+              // Award points based on the total after reward discount
+              const pointsBase = total - tax // Don't award points on tax
+              loyaltyPointsAwarded = Math.floor(pointsBase * program.points_per_dollar)
               if (loyaltyPointsAwarded > 0) {
                 await addPointsToCustomer(
                   customer_id, 
@@ -110,11 +136,13 @@ export class SalesController {
         sales,
         summary: {
           subtotal,
+          reward_discount,
           tax,
           total,
           items_count: items.length,
           total_quantity: items.reduce((sum, item) => sum + item.quantity, 0),
           loyalty_points_awarded: loyaltyPointsAwarded,
+          loyalty_points_redeemed: reward_points_used,
           customer_id: customer_id || null
         }
       }
