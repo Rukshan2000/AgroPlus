@@ -26,7 +26,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails }) {
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '5mm' }}>
         <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '2mm' }}>
-          AGROPLUS
+          Green Plus Agro
         </div>
         <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
           Farm Fresh Products & Supplies
@@ -35,7 +35,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails }) {
           Tel: +94 77 236 5879
         </div>
         <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
-          www.agroplus.lk
+          www.greenplusagro.lk
         </div>
       </div>
 
