@@ -20,14 +20,14 @@ export default function Receipt({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md bg-white dark:bg-gray-800">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] bg-white dark:bg-gray-800 flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-center text-2xl font-bold text-gray-900 dark:text-gray-100">
             RECEIPT
           </DialogTitle>
         </DialogHeader>
         
-        <div className="text-center mb-4 text-sm text-gray-600 dark:text-gray-400">
+        <div className="flex-shrink-0 text-center mb-4 text-sm text-gray-600 dark:text-gray-400">
           <p className="font-bold text-gray-900 dark:text-gray-100">AgroPlus</p>
           {saleId && (
             <p className="text-xs mt-1">Sale ID: <span className="font-mono font-bold">{saleId}</span></p>
@@ -35,7 +35,8 @@ export default function Receipt({
           <p>{new Date().toLocaleString()}</p>
         </div>
         
-        <div className="space-y-2 mb-4 text-sm">
+        {/* Scrollable items area */}
+        <div className="flex-1 overflow-y-auto space-y-2 mb-4 text-sm pr-2 max-h-[40vh] receipt-scrollbar">
           {cart.map((item, index) => (
             <div key={index} className="flex justify-between">
               <div className="flex-1">
@@ -50,39 +51,42 @@ export default function Receipt({
           ))}
         </div>
         
-        <Separator className="my-4" />
-        
-        <div className="space-y-1 text-sm">
-          <div className="flex justify-between text-gray-700 dark:text-gray-300">
-            <span>Subtotal:</span>
-            <span>LKR {subtotal.toFixed(2)}</span>
+        {/* Fixed footer section */}
+        <div className="flex-shrink-0">
+          <Separator className="my-4" />
+          
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between text-gray-700 dark:text-gray-300">
+              <span>Subtotal:</span>
+              <span>LKR {subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-gray-700 dark:text-gray-300">
+              <span>Tax:</span>
+              <span>LKR {tax.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-lg border-t pt-2 text-gray-900 dark:text-gray-100">
+              <span>Total:</span>
+              <span>LKR {total.toFixed(2)}</span>
+            </div>
           </div>
-          <div className="flex justify-between text-gray-700 dark:text-gray-300">
-            <span>Tax:</span>
-            <span>LKR {tax.toFixed(2)}</span>
+          
+          <div className="text-center mt-4 text-sm text-gray-600 dark:text-gray-400">
+            <p>Thank you for your business!</p>
           </div>
-          <div className="flex justify-between font-bold text-lg border-t pt-2 text-gray-900 dark:text-gray-100">
-            <span>Total:</span>
-            <span>LKR {total.toFixed(2)}</span>
+          
+          <div className="flex gap-2 mt-4">
+            <Button onClick={onPrint} className="flex-1">
+              <Printer className="h-4 w-4 mr-2" />
+              Print
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onNewSale}
+              className="flex-1"
+            >
+              New Sale
+            </Button>
           </div>
-        </div>
-        
-        <div className="text-center mt-4 text-sm text-gray-600 dark:text-gray-400">
-          <p>Thank you for your business!</p>
-        </div>
-        
-        <div className="flex gap-2 mt-4">
-          <Button onClick={onPrint} className="flex-1">
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onNewSale}
-            className="flex-1"
-          >
-            New Sale
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

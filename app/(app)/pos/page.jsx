@@ -347,50 +347,136 @@ export default function POSSystem() {
   const tax = subtotal * 0.08
   const total = subtotal + tax
 
-  const printBill = () => {
-    // Open thermal receipt in new window
-    const printWindow = window.open('', '_blank', 'width=302,height=600')
+  const printBill = async () => {
+    // Get printer settings from localStorage
+    const printerSettings = JSON.parse(localStorage.getItem('printerSettings') || '{}')
+    const printMethod = printerSettings.printMethod || 'browser'
     
-    if (printWindow) {
-      const receiptContent = document.getElementById('thermal-receipt')
-      
-      if (receiptContent) {
-        printWindow.document.write(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <title>Print Receipt - Sale #${saleId || 'N/A'}</title>
-              <style>
-                @media print {
-                  @page {
-                    size: 80mm auto;
-                    margin: 0;
-                  }
-                  body {
-                    margin: 0;
-                    padding: 0;
-                  }
-                }
-                body {
-                  margin: 0;
-                  padding: 0;
-                  font-family: monospace;
-                }
-              </style>
-            </head>
-            <body>
-              ${receiptContent.innerHTML}
-            </body>
-          </html>
-        `)
-        printWindow.document.close()
+    const receiptContent = document.getElementById('thermal-receipt')
+    
+    if (!receiptContent) {
+      toast({
+        title: "Print Error",
+        description: "Receipt content not found",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Try direct printing methods first (network/webusb)
+    if (printMethod === 'network' || printMethod === 'webusb') {
+      try {
+        const { printReceipt } = await import('@/lib/thermal-printer')
         
-        // Wait for content to load then print
+        // Prepare receipt data for ESC/POS
+        const receiptData = {
+          storeName: 'AgroPlus',
+          address: '123 Farm Road, Green Valley',
+          phone: '+94 77 123 4567',
+          saleId: saleId || 'N/A',
+          date: new Date().toLocaleString(),
+          items: cart.map(item => ({
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            total: item.total
+          })),
+          subtotal,
+          tax,
+          total,
+          customer: selectedCustomer,
+          loyaltyInfo: selectedCustomer ? {
+            pointsEarned,
+            pointsRedeemed,
+            newBalance: (selectedCustomer.points_balance || 0) + pointsEarned - pointsRedeemed
+          } : null
+        }
+
+        const result = await printReceipt(receiptData, {
+          preferredMethod: printMethod,
+          printerIP: printerSettings.printerIP,
+          printerPort: printerSettings.printerPort,
+          fallbackToBrowser: true
+        })
+
+        if (result.success) {
+          toast({
+            title: "Print Success",
+            description: `Receipt printed via ${result.method}`,
+          })
+          return
+        }
+      } catch (error) {
+        console.error('Direct print failed, falling back to browser:', error)
+        toast({
+          title: "Direct Print Failed",
+          description: "Falling back to browser print",
+          variant: "destructive"
+        })
+      }
+    }
+
+    // Fallback: Browser print via hidden iframe
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    document.body.appendChild(iframe)
+    
+    const iframeDoc = iframe.contentWindow.document
+    
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Print Receipt - Sale #${saleId || 'N/A'}</title>
+          <style>
+            @media print {
+              @page {
+                size: 80mm auto;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+              }
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              font-family: monospace;
+              width: 80mm;
+            }
+          </style>
+        </head>
+        <body>
+          ${receiptContent.innerHTML}
+        </body>
+      </html>
+    `)
+    iframeDoc.close()
+    
+    // Wait for content to load, then print and remove iframe
+    iframe.onload = () => {
+      try {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+        
+        // Remove iframe after a delay
         setTimeout(() => {
-          printWindow.focus()
-          printWindow.print()
-          printWindow.close()
-        }, 250)
+          document.body.removeChild(iframe)
+        }, 1000)
+      } catch (error) {
+        console.error('Print error:', error)
+        document.body.removeChild(iframe)
+        toast({
+          title: "Print Error",
+          description: "Failed to print receipt",
+          variant: "destructive"
+        })
       }
     }
   }

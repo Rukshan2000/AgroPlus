@@ -121,3 +121,39 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom scrollbar for receipt items */
+.receipt-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+}
+
+.receipt-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.receipt-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.receipt-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.receipt-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark .receipt-scrollbar {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.dark .receipt-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.dark .receipt-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
