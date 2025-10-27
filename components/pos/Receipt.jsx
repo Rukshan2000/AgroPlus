@@ -12,7 +12,8 @@ export default function Receipt({
   cart,
   onPrint,
   onNewSale,
-  saleId
+  saleId,
+  paymentDetails
 }) {
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
   const tax = subtotal * 0.08
@@ -69,6 +70,30 @@ export default function Receipt({
               <span>LKR {total.toFixed(2)}</span>
             </div>
           </div>
+          
+          {/* Payment Details */}
+          {paymentDetails && (
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="space-y-1 text-sm">
+                <div className="flex justify-between font-semibold text-blue-900 dark:text-blue-100">
+                  <span>Payment Method:</span>
+                  <span className="uppercase">{paymentDetails.method}</span>
+                </div>
+                {paymentDetails.method === 'cash' && (
+                  <>
+                    <div className="flex justify-between text-blue-800 dark:text-blue-200">
+                      <span>Amount Paid:</span>
+                      <span>LKR {paymentDetails.amount_paid.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-blue-800 dark:text-blue-200">
+                      <span>Change:</span>
+                      <span>LKR {paymentDetails.change.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
           
           <div className="text-center mt-4 text-sm text-gray-600 dark:text-gray-400">
             <p>Thank you for your business!</p>

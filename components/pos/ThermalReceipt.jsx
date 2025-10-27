@@ -2,7 +2,7 @@
 
 import React from 'react'
 
-export default function ThermalReceipt({ cart, saleId }) {
+export default function ThermalReceipt({ cart, saleId, paymentDetails }) {
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
   const tax = subtotal * 0.08
   const total = subtotal + tax
@@ -32,7 +32,7 @@ export default function ThermalReceipt({ cart, saleId }) {
           Farm Fresh Products & Supplies
         </div>
         <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
-          Tel: +94 XX XXX XXXX
+          Tel: +94 77 236 5879
         </div>
         <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
           www.agroplus.lk
@@ -114,6 +114,34 @@ export default function ThermalReceipt({ cart, saleId }) {
 
       {/* Divider */}
       <div style={{ borderTop: '1px dashed black', margin: '3mm 0' }}></div>
+
+      {/* Payment Details */}
+      {paymentDetails && (
+        <div style={{ fontSize: '11px', marginBottom: '3mm' }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between',
+            marginBottom: '1mm',
+            fontWeight: 'bold'
+          }}>
+            <span>Payment Method:</span>
+            <span style={{ textTransform: 'uppercase' }}>{paymentDetails.method}</span>
+          </div>
+          {paymentDetails.method === 'cash' && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1mm' }}>
+                <span>Amount Paid:</span>
+                <span>LKR {paymentDetails.amount_paid.toFixed(2)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Change:</span>
+                <span>LKR {paymentDetails.change.toFixed(2)}</span>
+              </div>
+            </>
+          )}
+          <div style={{ borderTop: '1px dashed black', margin: '2mm 0' }}></div>
+        </div>
+      )}
 
       {/* Footer */}
       <div style={{ 

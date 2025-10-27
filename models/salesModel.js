@@ -9,6 +9,9 @@ export async function createSale({
   discount_percentage = 0,
   discount_amount = 0,
   total_amount,
+  payment_method = 'cash',
+  amount_paid,
+  change_given = 0,
   created_by
 }) {
   // Get the product's buying price for profit calculation
@@ -23,14 +26,16 @@ export async function createSale({
   const result = await query(`
     INSERT INTO sales (
       product_id, product_name, quantity, unit_price, original_price, 
-      discount_percentage, discount_amount, total_amount, created_by,
+      discount_percentage, discount_amount, total_amount, 
+      payment_method, amount_paid, change_given, created_by,
       buying_price_at_sale, profit_per_unit, total_profit, profit_margin_percentage
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
     RETURNING *
   `, [
     product_id, product_name, quantity, unit_price, original_price,
-    discount_percentage, discount_amount, total_amount, created_by,
+    discount_percentage, discount_amount, total_amount,
+    payment_method, amount_paid, change_given, created_by,
     buying_price_at_sale, profit_per_unit, total_profit, profit_margin_percentage
   ])
   return result.rows[0]

@@ -10,6 +10,7 @@ import Receipt from '@/components/pos/Receipt'
 import ThermalReceipt from '@/components/pos/ThermalReceipt'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
 import POSReturnModal from '@/components/pos-return-modal'
+import PaymentModal from '@/components/pos/payment-modal'
 import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
 import offlineProductModel from '@/models/offlineProductModel'
@@ -21,6 +22,8 @@ export default function POSSystem() {
   const [quantity, setQuantity] = useState('1')
   const [discount, setDiscount] = useState('')
   const [showBill, setShowBill] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [paymentDetails, setPaymentDetails] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [products, setProducts] = useState([])
   const [productSearch, setProductSearch] = useState('')
@@ -493,10 +496,11 @@ export default function POSSystem() {
 
   const handleNewSale = () => {
     setShowBill(false)
+    setPaymentDetails(null)
     clearCart()
   }
 
-  const processSale = async () => {
+  const initiatePayment = () => {
     if (cart.length === 0) {
       toast({
         title: "Empty cart",
@@ -506,6 +510,18 @@ export default function POSSystem() {
       return
     }
 
+    // Show payment modal instead of processing immediately
+    setShowPaymentModal(true)
+  }
+
+  const handlePaymentComplete = (payment) => {
+    setPaymentDetails(payment)
+    setShowPaymentModal(false)
+    // Now process the sale with payment details
+    processSale(payment)
+  }
+
+  const processSale = async (payment) => {
     setIsLoading(true)
     try {
       const saleData = {
@@ -523,7 +539,9 @@ export default function POSSystem() {
         subtotal,
         tax,
         total_amount: total,
-        payment_method: 'cash', // Default to cash, can be updated based on UI
+        payment_method: payment.method,
+        amount_paid: payment.amount_paid,
+        change_given: payment.change,
         cashier_id: session?.user?.id,
         cashier_name: session?.user?.name
       }
@@ -611,7 +629,7 @@ export default function POSSystem() {
           break
         case 'F2':
           e.preventDefault()
-          if (cart.length > 0) processSale()
+          if (cart.length > 0) initiatePayment()
           break
         case 'F3':
           e.preventDefault()
@@ -638,7 +656,7 @@ export default function POSSystem() {
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [cart.length, productId, quantity, processSale, clearCart, addToCart])
+  }, [cart.length, productId, quantity, initiatePayment, clearCart, addToCart])
 
   const isCashier = session?.user?.role === 'cashier'
   
@@ -1237,7 +1255,7 @@ export default function POSSystem() {
                   </div>
 
                   <button
-                    onClick={processSale}
+                    onClick={initiatePayment}
                     disabled={isLoading}
                     className="w-full mt-4 h-16 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold text-xl rounded-lg transition-all duration-150 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:shadow-none flex items-center justify-center gap-3"
                   >
@@ -1260,19 +1278,28 @@ export default function POSSystem() {
         </div>
       </div>
 
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        total={total}
+        onComplete={handlePaymentComplete}
+      />
+
       {/* Receipt Modal */}
       <Receipt
         isOpen={showBill}
         onClose={setShowBill}
         cart={cart}
         saleId={saleId}
+        paymentDetails={paymentDetails}
         onPrint={printBill}
         onNewSale={handleNewSale}
       />
 
       {/* Hidden Thermal Receipt for Printing */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-        <ThermalReceipt cart={cart} saleId={saleId} />
+        <ThermalReceipt cart={cart} saleId={saleId} paymentDetails={paymentDetails} />
       </div>
 
       {/* Price Variation Modal */}

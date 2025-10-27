@@ -11,10 +11,22 @@ export async function POST(request) {
     }
 
     const body = await request.json()
-    const { items, subtotal, tax, total } = body
+    const { items, subtotal, tax, total, payment_method = 'cash', amount_paid, change_given = 0 } = body
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return Response.json({ message: 'Invalid items data' }, { status: 400 })
+    }
+
+    // Validate payment details
+    if (payment_method === 'cash') {
+      if (!amount_paid || amount_paid < total) {
+        return Response.json({ message: 'Insufficient payment amount' }, { status: 400 })
+      }
+    } else if (payment_method === 'card') {
+      // For card payments, amount_paid should equal total
+      if (!amount_paid) {
+        return Response.json({ message: 'Payment amount required' }, { status: 400 })
+      }
     }
 
     // Start transaction
@@ -45,6 +57,9 @@ export async function POST(request) {
           discount_percentage: item.discount_percentage || 0,
           discount_amount: item.discount_amount || 0,
           total_amount: item.total_amount,
+          payment_method,
+          amount_paid: amount_paid / items.length, // Distribute payment across items
+          change_given: change_given / items.length, // Distribute change across items
           created_by: session.user.id
         })
 
