@@ -13,6 +13,7 @@ import POSReturnModal from '@/components/pos-return-modal'
 import PaymentModal from '@/components/pos/payment-modal'
 import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
+import ThemeToggle from '@/components/theme-toggle'
 import offlineProductModel from '@/models/offlineProductModel'
 import offlineSalesModel from '@/models/offlineSalesModel'
 
@@ -36,8 +37,10 @@ export default function POSSystem() {
   const [selectedProductForVariation, setSelectedProductForVariation] = useState(null)
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [saleId, setSaleId] = useState(null) // Store sale ID for receipt
+  const [selectedProductIndex, setSelectedProductIndex] = useState(0) // For arrow key navigation
   const { toast } = useToast()
   const { session } = useSession()
+  const isCashier = session?.user?.role === 'cashier'
 
   const handleLogout = async () => {
     try {
@@ -620,29 +623,106 @@ export default function POSSystem() {
     })
   }
 
-  // Keyboard shortcuts for faster operation
+  // Keyboard shortcuts for faster operation (Ctrl-based to avoid Chrome conflicts)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Only apply shortcuts when not focused on input fields
-      if (e.target.tagName === 'INPUT') return
+      // Only apply Ctrl shortcuts when not focused on input fields (except Ctrl+Enter for add)
+      const isInputFocused = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA'
+      
+      // Ctrl+Q - Focus Product Input
+      if (e.ctrlKey && e.key === 'q') {
+        e.preventDefault()
+        document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
+        return
+      }
+      
+      // Ctrl+Enter - Complete Sale
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault()
+        if (cart.length > 0) initiatePayment()
+        return
+      }
+      
+      // Ctrl+K - Clear Cart
+      if (e.ctrlKey && e.key === 'k') {
+        e.preventDefault()
+        clearCart()
+        return
+      }
+      
+      // Ctrl+/ - Focus Search
+      if (e.ctrlKey && e.key === '/') {
+        e.preventDefault()
+        document.querySelector('input[placeholder="Search products..."]')?.focus()
+        return
+      }
+      
+      // Ctrl+L - Logout (for cashiers)
+      if (e.ctrlKey && e.key === 'l' && isCashier) {
+        e.preventDefault()
+        handleLogout()
+        return
+      }
+      
+      // Regular shortcuts (only when not in input)
+      if (isInputFocused) {
+        // Allow Enter in product input to add to cart
+        if (e.key === 'Enter' && productId) {
+          e.preventDefault()
+          addToCart()
+        }
+        return
+      }
+
+      // Arrow key navigation for product grid
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault()
+        const totalProducts = filteredProducts.length
+        if (totalProducts === 0) return
+        
+        const cols = 4 // Grid has 4 columns
+        let newIndex = selectedProductIndex
+        
+        switch(e.key) {
+          case 'ArrowRight':
+            newIndex = Math.min(selectedProductIndex + 1, totalProducts - 1)
+            break
+          case 'ArrowLeft':
+            newIndex = Math.max(selectedProductIndex - 1, 0)
+            break
+          case 'ArrowDown':
+            newIndex = Math.min(selectedProductIndex + cols, totalProducts - 1)
+            break
+          case 'ArrowUp':
+            newIndex = Math.max(selectedProductIndex - cols, 0)
+            break
+        }
+        
+        setSelectedProductIndex(newIndex)
+        
+        // Scroll the selected product into view
+        const productButtons = document.querySelectorAll('[data-product-index]')
+        if (productButtons[newIndex]) {
+          productButtons[newIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        }
+        return
+      }
+      
+      // Space or Enter to add selected product to cart
+      if ((e.key === ' ' || e.key === 'Enter') && filteredProducts.length > 0) {
+        e.preventDefault()
+        const selectedProduct = filteredProducts[selectedProductIndex]
+        if (selectedProduct) {
+          // Trigger click on the product button
+          const productButtons = document.querySelectorAll('[data-product-index]')
+          if (productButtons[selectedProductIndex]) {
+            productButtons[selectedProductIndex].click()
+          }
+        }
+        return
+      }
 
       switch(e.key) {
-        case 'F1':
-          e.preventDefault()
-          document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
-          break
-        case 'F2':
-          e.preventDefault()
-          if (cart.length > 0) initiatePayment()
-          break
-        case 'F3':
-          e.preventDefault()
-          clearCart()
-          break
-        case 'F4':
-          e.preventDefault()
-          document.querySelector('input[placeholder="Search products..."]')?.focus()
-          break
         case '+':
           e.preventDefault()
           setQuantity((parseInt(quantity) + 1).toString())
@@ -651,18 +731,12 @@ export default function POSSystem() {
           e.preventDefault()
           setQuantity(Math.max(1, parseInt(quantity) - 1).toString())
           break
-        case 'Enter':
-          e.preventDefault()
-          if (productId) addToCart()
-          break
       }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [cart.length, productId, quantity, initiatePayment, clearCart, addToCart])
-
-  const isCashier = session?.user?.role === 'cashier'
+  }, [cart.length, productId, quantity, filteredProducts, selectedProductIndex, isCashier, initiatePayment, clearCart, addToCart, handleLogout])
   
   return (
     <div className={isCashier ? "fixed inset-0 bg-gray-50 dark:bg-black z-50 overflow-auto" : "min-h-screen bg-gray-50 dark:bg-black"}>
@@ -675,8 +749,11 @@ export default function POSSystem() {
           </h1>
           
           <div className="flex items-center gap-4">
-            {/* Connection Status */}
-            <ConnectionStatusBadge />
+            {/* Connection Status + Theme Toggle */}
+            <div className="flex items-center gap-2">
+              <ConnectionStatusBadge />
+              <ThemeToggle />
+            </div>
             
             {/* Returns Button */}
             <Button
@@ -705,12 +782,13 @@ export default function POSSystem() {
               </div>
             )}
             {/* Keyboard Shortcuts Help */}
-            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-4 hidden md:flex">
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">F1</kbd> Focus Product</span>
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">F2</kbd> Complete Sale</span>
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">F3</kbd> Clear Cart</span>
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">F4</kbd> Search</span>
-              <span><kbd className="px-1 py-0.5 bg-gray-200 dark:bg-gray-800 rounded">Enter</kbd> Add Item</span>
+            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-3 hidden lg:flex">
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+Q</kbd> Product</span>
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+↵</kbd> Sale</span>
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+K</kbd> Clear</span>
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+/</kbd> Search</span>
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">←→↑↓</kbd> Navigate</span>
+              {isCashier && <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+L</kbd> Logout</span>}
             </div>
             
             {/* Logout button for cashier users */}
@@ -758,8 +836,9 @@ export default function POSSystem() {
           <div className="grid grid-cols-12 gap-4 items-end">
             {/* Product Search/Input - 4 columns */}
             <div className="col-span-4">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                Product ID/SKU/Name
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center justify-between">
+                <span>Product ID/SKU/Name</span>
+                <kbd className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs font-mono">Ctrl+Q</kbd>
               </label>
               <input
                 type="text"
@@ -803,7 +882,7 @@ export default function POSSystem() {
             {/* Discount - 2 columns */}
             <div className="col-span-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                Discount % {discount && parseFloat(discount) > 0 && (
+                Global Discount % {discount && parseFloat(discount) > 0 && (
                   <span className="text-green-600 dark:text-green-400 font-bold">
                     (Active)
                   </span>
@@ -839,9 +918,10 @@ export default function POSSystem() {
             <div className="col-span-2">
               <button
                 onClick={addToCart}
-                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-lg transition-colors duration-150 focus:ring-2 focus:ring-green-500"
+                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-lg transition-colors duration-150 focus:ring-2 focus:ring-green-500 flex items-center justify-center gap-2"
               >
                 ADD TO CART
+                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs font-mono">↵</kbd>
               </button>
             </div>
 
@@ -850,9 +930,10 @@ export default function POSSystem() {
               <button
                 onClick={clearCart}
                 disabled={cart.length === 0}
-                className="w-full h-12 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold text-lg rounded-lg transition-colors duration-150"
+                className="w-full h-12 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold text-lg rounded-lg transition-colors duration-150 flex items-center justify-center gap-2"
               >
                 CLEAR CART
+                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+K</kbd>
               </button>
             </div>
           </div>
@@ -901,13 +982,18 @@ export default function POSSystem() {
               <div className="mb-4 space-y-3">
                 {/* Search and Sort Controls */}
                 <div className="flex gap-3 items-center">
-                  <input
-                    type="text"
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    className="flex-1 h-10 px-4 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                    placeholder="Search products..."
-                  />
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
+                      className="w-full h-10 px-4 pr-16 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
+                      placeholder="Search products..."
+                    />
+                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs font-mono">
+                      Ctrl+/
+                    </kbd>
+                  </div>
                   
                   {/* Sort By Dropdown */}
                   <select
@@ -989,7 +1075,11 @@ export default function POSSystem() {
                   return (
                   <button
                     key={product.id}
+                    data-product-index={index}
                     onClick={() => {
+                      // Update selected index on click
+                      setSelectedProductIndex(index)
+                      
                       // Check if product is already in cart
                       const existingItemIndex = cart.findIndex(item => item.id === product.id)
                       const qty = parseInt(quantity) || 1
@@ -1074,7 +1164,12 @@ export default function POSSystem() {
                       setQuantity('1')
                       // Don't clear discount automatically - let user keep it for multiple items
                     }}
-                    className={`p-3 hover:shadow-md rounded-lg border text-left transition-all duration-150 transform hover:scale-105 relative ${
+                    className={`p-3 hover:shadow-md rounded-lg border-2 text-left transition-all duration-150 transform hover:scale-105 relative ${
+                      // Keyboard navigation highlight
+                      index === selectedProductIndex
+                        ? 'ring-4 ring-blue-500 ring-offset-2 dark:ring-offset-black scale-105 shadow-xl'
+                        : ''
+                    } ${
                       isTopSeller 
                         ? 'bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-orange-300 dark:border-orange-700 shadow-md'
                         : isPopular && sortBy === 'popularity'
