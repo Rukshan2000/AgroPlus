@@ -388,7 +388,7 @@ export default function ShopPage() {
             Fresh • Organic • Premium Quality
           </Badge>
           <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent mb-6">
-            Shop AgroPlus
+            Shop Green Plus Agro
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed">
             Discover our carefully curated selection of premium organic and farm-fresh products. 
@@ -529,7 +529,7 @@ export default function ShopPage() {
                 <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
                   <Leaf className="h-6 w-6 text-white" />
                 </div>
-                <span className="text-2xl font-bold">AgroPlus</span>
+                <span className="text-2xl font-bold">Green Plus Agro</span>
               </div>
               <p className="text-gray-400 mb-6 text-lg leading-relaxed">
                 Your trusted partner for fresh, organic agricultural products. 
@@ -565,7 +565,7 @@ export default function ShopPage() {
                 </div>
                 <div className="flex items-center space-x-3">
                   <span className="text-green-400">✉️</span>
-                  <span>info@agroplus.com</span>
+                  <span>info@Green Plus Agro.com</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <span className="text-green-400">📍</span>
@@ -575,7 +575,7 @@ export default function ShopPage() {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-12 pt-8 text-center text-gray-400">
-            <p>&copy; 2025 AgroPlus. All rights reserved. Created by Rukshan Tharindu</p>
+            <p>&copy; 2025 Green Plus Agro. All rights reserved. Created by Rukshan Tharindu</p>
           </div>
         </div>
       </footer>

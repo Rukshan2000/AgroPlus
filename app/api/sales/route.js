@@ -11,7 +11,16 @@ export async function POST(request) {
     }
 
     const body = await request.json()
-    const { items, subtotal, tax, total, payment_method = 'cash', amount_paid, change_given = 0 } = body
+    const { 
+      items, 
+      subtotal, 
+      total, 
+      bill_discount_percentage = 0, 
+      bill_discount_amount = 0,
+      payment_method = 'cash', 
+      amount_paid, 
+      change_given = 0 
+    } = body
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return Response.json({ message: 'Invalid items data' }, { status: 400 })
@@ -84,7 +93,8 @@ export async function POST(request) {
         sales,
         summary: {
           subtotal,
-          tax,
+          bill_discount_percentage,
+          bill_discount_amount,
           total,
           items_count: items.length,
           total_quantity: items.reduce((sum, item) => sum + item.quantity, 0)

@@ -20,7 +20,8 @@ export default function POSSystem() {
   const [cart, setCart] = useState([])
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState('1')
-  const [discount, setDiscount] = useState('')
+  const [discount, setDiscount] = useState('') // Per-item discount
+  const [billDiscount, setBillDiscount] = useState('') // Whole bill discount
   const [showBill, setShowBill] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentDetails, setPaymentDetails] = useState(null)
@@ -347,8 +348,9 @@ export default function POSSystem() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
-  const tax = subtotal * 0.08
-  const total = subtotal + tax
+  const billDiscountPercent = parseFloat(billDiscount) || 0
+  const billDiscountAmount = (subtotal * billDiscountPercent) / 100
+  const total = subtotal - billDiscountAmount
 
   const printBill = async () => {
     // Get printer settings from localStorage
@@ -373,7 +375,7 @@ export default function POSSystem() {
         
         // Prepare receipt data for ESC/POS
         const receiptData = {
-          storeName: 'AgroPlus',
+          storeName: 'Green Plus Agro',
           address: '123 Farm Road, Green Valley',
           phone: '+94 77 123 4567',
           saleId: saleId || 'N/A',
@@ -488,6 +490,7 @@ export default function POSSystem() {
     setCart([])
     setShowBill(false)
     setSaleId(null)
+    setBillDiscount('')
     toast({
       title: "Cart cleared",
       description: "All items removed from cart"
@@ -537,8 +540,9 @@ export default function POSSystem() {
           buying_price: item.buying_price || 0 // Include buying price for profit calculation
         })),
         subtotal,
-        tax,
-        total_amount: total,
+        bill_discount_percentage: billDiscountPercent,
+        bill_discount_amount: billDiscountAmount,
+        total,
         payment_method: payment.method,
         amount_paid: payment.amount_paid,
         change_given: payment.change,
@@ -1242,10 +1246,30 @@ export default function POSSystem() {
                       <span className="font-semibold">Subtotal:</span>
                       <span className="font-bold">LKR {subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-lg">
-                      <span className="font-semibold">Tax (8%):</span>
-                      <span className="font-bold">LKR {tax.toFixed(2)}</span>
+                    
+                    {/* Bill Discount Input */}
+                    <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <label className="text-sm font-semibold text-orange-700 dark:text-orange-300 whitespace-nowrap">
+                        Bill Discount:
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={billDiscount}
+                        onChange={(e) => setBillDiscount(e.target.value)}
+                        placeholder="0"
+                        className="w-20 px-2 py-1 text-sm border border-orange-300 dark:border-orange-700 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-800"
+                      />
+                      <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">%</span>
+                      {billDiscountAmount > 0 && (
+                        <span className="ml-auto text-sm font-bold text-orange-600 dark:text-orange-400">
+                          -LKR {billDiscountAmount.toFixed(2)}
+                        </span>
+                      )}
                     </div>
+                    
                     <div className="border-t dark:border-gray-600 pt-2">
                       <div className="flex justify-between text-2xl font-bold text-green-600 dark:text-green-400">
                         <span>TOTAL:</span>
@@ -1293,13 +1317,19 @@ export default function POSSystem() {
         cart={cart}
         saleId={saleId}
         paymentDetails={paymentDetails}
+        billDiscount={billDiscountPercent}
         onPrint={printBill}
         onNewSale={handleNewSale}
       />
 
       {/* Hidden Thermal Receipt for Printing */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-        <ThermalReceipt cart={cart} saleId={saleId} paymentDetails={paymentDetails} />
+        <ThermalReceipt 
+          cart={cart} 
+          saleId={saleId} 
+          paymentDetails={paymentDetails} 
+          billDiscount={billDiscountPercent}
+        />
       </div>
 
       {/* Price Variation Modal */}

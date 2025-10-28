@@ -33,14 +33,14 @@ export default function HomePage() {
     {
       name: "Sarah Johnson",
       role: "Home Chef & Food Blogger",
-      content: "AgroPlus has completely transformed how I cook. The quality of their organic vegetables is absolutely unmatched!",
+      content: "Green Plus Agro has completely transformed how I cook. The quality of their organic vegetables is absolutely unmatched!",
       rating: 5,
       location: "San Francisco, CA"
     },
     {
       name: "Mike Chen",
       role: "Restaurant Owner",
-      content: "Reliable supply and exceptional quality every single time. AgroPlus is our go-to supplier for fresh ingredients.",
+      content: "Reliable supply and exceptional quality every single time. Green Plus Agro is our go-to supplier for fresh ingredients.",
       rating: 5,
       location: "Seattle, WA"
     },
@@ -109,7 +109,7 @@ export default function HomePage() {
         <div className="container mx-auto">
           <div className="text-center mb-20">
             <h2 className="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white mb-6">
-              Why Choose AgroPlus?
+              Why Choose Green Plus Agro?
             </h2>
             <p className="text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
               We're committed to bringing you the highest quality organic products with exceptional service and care.
@@ -144,7 +144,7 @@ export default function HomePage() {
               What Our Customers Say
             </h2>
             <p className="text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
-              Join thousands of satisfied customers who trust AgroPlus for their organic needs.
+              Join thousands of satisfied customers who trust Green Plus Agro for their organic needs.
             </p>
           </div>
           
@@ -221,7 +221,7 @@ export default function HomePage() {
             <div>
               <div className="flex items-center space-x-3 mb-6">
                 <Leaf className="h-10 w-10 text-emerald-400" />
-                <span className="text-2xl font-bold">AgroPlus</span>
+                <span className="text-2xl font-bold">Green Plus Agro</span>
               </div>
               <p className="text-slate-400 leading-relaxed mb-6">
                 Your trusted partner for fresh, organic agricultural products. Committed to quality, sustainability, and your health.
@@ -265,7 +265,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center space-x-3">
                   <span className="text-emerald-400">✉️</span>
-                  <span>info@agroplus.com</span>
+                  <span>info@Green Plus Agro.com</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <span className="text-emerald-400">📍</span>
@@ -275,7 +275,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="border-t border-slate-800 mt-12 pt-8 text-center text-slate-400">
-            <p>&copy; 2025 AgroPlus. All rights reserved. Created by Rukshan Tharindu</p>
+            <p>&copy; 2025 Green Plus Agro. All rights reserved. Created by Rukshan Tharindu</p>
           </div>
         </div>
       </footer>

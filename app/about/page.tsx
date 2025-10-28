@@ -48,7 +48,7 @@ export default function AboutPage() {
   const milestones = [
     {
       year: "2015",
-      title: "Founded AgroPlus",
+      title: "Founded Green Plus Agro",
       description: "Started with a small organic farm and a vision to provide fresh, healthy produce to our community."
     },
     {
@@ -125,7 +125,7 @@ export default function AboutPage() {
                 <span className="text-green-600"> Naturally</span>
               </h1>
               <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
-                For over a decade, AgroPlus has been connecting communities with the freshest, 
+                For over a decade, Green Plus Agro has been connecting communities with the freshest, 
                 most sustainable agricultural products. We believe in the power of natural farming 
                 and the importance of supporting local growers.
               </p>
@@ -142,7 +142,7 @@ export default function AboutPage() {
               <div className="aspect-square bg-green-100 dark:bg-green-900/20 rounded-2xl p-8">
                 <Image
                   src="/placeholder.svg"
-                  alt="AgroPlus Farm"
+                  alt="Green Plus Agro Farm"
                   width={400}
                   height={400}
                   className="w-full h-full object-cover rounded-xl"
@@ -263,7 +263,7 @@ export default function AboutPage() {
               Meet Our Team
             </h2>
             <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              The passionate individuals behind AgroPlus, working together to bring you 
+              The passionate individuals behind Green Plus Agro, working together to bring you 
               the freshest and most sustainable agricultural products.
             </p>
           </div>
@@ -357,7 +357,7 @@ export default function AboutPage() {
           </h2>
           <p className="text-lg text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
             Experience the difference that comes from truly fresh, sustainably grown produce. 
-            Join thousands of satisfied customers who trust AgroPlus for their daily needs.
+            Join thousands of satisfied customers who trust Green Plus Agro for their daily needs.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button asChild size="lg" className="bg-green-600 hover:bg-green-700">
@@ -377,7 +377,7 @@ export default function AboutPage() {
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <Leaf className="h-8 w-8 text-green-400" />
-                <span className="text-xl font-bold">AgroPlus</span>
+                <span className="text-xl font-bold">Green Plus Agro</span>
               </div>
               <p className="text-gray-400">
                 Your trusted partner for fresh, organic agricultural products.
@@ -405,13 +405,13 @@ export default function AboutPage() {
               <h3 className="font-semibold mb-4">Contact Info</h3>
               <div className="space-y-2 text-gray-400">
                 <p>📞 +1 (555) 123-4567</p>
-                <p>✉️ info@agroplus.com</p>
+                <p>✉️ info@Green Plus Agro.com</p>
                 <p>📍 123 Farm Road, Green Valley</p>
               </div>
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2025 AgroPlus. All rights reserved. Created by Rukshan Tharindu</p>
+            <p>&copy; 2025 Green Plus Agro. All rights reserved. Created by Rukshan Tharindu</p>
           </div>
         </div>
       </footer>

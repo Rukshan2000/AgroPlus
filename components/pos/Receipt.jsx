@@ -13,11 +13,12 @@ export default function Receipt({
   onPrint,
   onNewSale,
   saleId,
-  paymentDetails
+  paymentDetails,
+  billDiscount = 0
 }) {
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
-  const tax = subtotal * 0.08
-  const total = subtotal + tax
+  const billDiscountAmount = (subtotal * billDiscount) / 100
+  const total = subtotal - billDiscountAmount
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -29,7 +30,7 @@ export default function Receipt({
         </DialogHeader>
         
         <div className="flex-shrink-0 text-center mb-4 text-sm text-gray-600 dark:text-gray-400">
-          <p className="font-bold text-gray-900 dark:text-gray-100">AgroPlus</p>
+          <p className="font-bold text-gray-900 dark:text-gray-100">Green Plus Agro</p>
           {saleId && (
             <p className="text-xs mt-1">Sale ID: <span className="font-mono font-bold">{saleId}</span></p>
           )}
@@ -61,10 +62,12 @@ export default function Receipt({
               <span>Subtotal:</span>
               <span>LKR {subtotal.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between text-gray-700 dark:text-gray-300">
-              <span>Tax:</span>
-              <span>LKR {tax.toFixed(2)}</span>
-            </div>
+            {billDiscount > 0 && (
+              <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                <span>Bill Discount ({billDiscount}%):</span>
+                <span>-LKR {billDiscountAmount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold text-lg border-t pt-2 text-gray-900 dark:text-gray-100">
               <span>Total:</span>
               <span>LKR {total.toFixed(2)}</span>

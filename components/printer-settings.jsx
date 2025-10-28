@@ -84,7 +84,7 @@ export function PrinterSettings() {
         
         const { printViaWebUSB } = await import('@/lib/thermal-printer')
         await printViaWebUSB({
-          storeName: 'AgroPlus',
+          storeName: 'Green Plus Agro',
           items: [{ name: 'Test Item', quantity: 1, total: 0 }],
           subtotal: 0,
           tax: 0,

@@ -81,7 +81,7 @@ export default function ContactPage() {
     {
       icon: <Mail className="h-6 w-6 text-green-600" />,
       title: "Email",
-      details: ["info@agroplus.com", "support@agroplus.com"],
+      details: ["info@Green Plus Agro.com", "support@Green Plus Agro.com"],
       description: "We reply within 24 hours"
     },
     {
@@ -128,7 +128,7 @@ export default function ContactPage() {
             Get in Touch
           </Badge>
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-            Contact AgroPlus
+            Contact Green Plus Agro
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
             Have questions about our products, need help with an order, or want to learn more about our farming practices? 
@@ -372,7 +372,7 @@ export default function ContactPage() {
             <div>
               <div className="flex items-center space-x-2 mb-4">
                 <Leaf className="h-8 w-8 text-green-400" />
-                <span className="text-xl font-bold">AgroPlus</span>
+                <span className="text-xl font-bold">Green Plus Agro</span>
               </div>
               <p className="text-gray-400">
                 Your trusted partner for fresh, organic agricultural products.
@@ -400,13 +400,13 @@ export default function ContactPage() {
               <h3 className="font-semibold mb-4">Contact Info</h3>
               <div className="space-y-2 text-gray-400">
                 <p>📞 +1 (555) 123-4567</p>
-                <p>✉️ info@agroplus.com</p>
+                <p>✉️ info@Green Plus Agro.com</p>
                 <p>📍 123 Farm Road, Green Valley</p>
               </div>
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2025 AgroPlus. All rights reserved. Created by Rukshan Tharindu</p>
+            <p>&copy; 2025 Green Plus Agro. All rights reserved. Created by Rukshan Tharindu</p>
           </div>
         </div>
       </footer>

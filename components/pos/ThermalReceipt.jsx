@@ -2,10 +2,10 @@
 
 import React from 'react'
 
-export default function ThermalReceipt({ cart, saleId, paymentDetails }) {
+export default function ThermalReceipt({ cart, saleId, paymentDetails, billDiscount = 0 }) {
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
-  const tax = subtotal * 0.08
-  const total = subtotal + tax
+  const billDiscountAmount = (subtotal * billDiscount) / 100
+  const total = subtotal - billDiscountAmount
   const currentDate = new Date()
 
   return (
@@ -29,7 +29,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails }) {
           Green Plus Agro
         </div>
         <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
-          Farm Fresh Products & Supplies
+         Grow Green Grow Better
         </div>
         <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
           Tel: +94 77 236 5879
@@ -90,29 +90,36 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails }) {
       <div style={{ borderTop: '1px solid black', margin: '3mm 0' }}></div>
 
       {/* Totals */}
-      <div style={{ fontSize: '11px', marginBottom: '3mm' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1mm' }}>
-          <span>Subtotal:</span>
-          <span>LKR {subtotal.toFixed(2)}</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2mm' }}>
-          <span>Tax (8%):</span>
-          <span>LKR {tax.toFixed(2)}</span>
-        </div>
-        <div style={{ 
+        <div style={{ fontSize: '11px', marginBottom: '3mm' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1mm' }}>
+            <span>Subtotal:</span>
+            <span>LKR {subtotal.toFixed(2)}</span>
+          </div>
+          {billDiscount > 0 && (
+            <div style={{ 
           display: 'flex', 
-          justifyContent: 'space-between',
-          fontSize: '14px',
-          fontWeight: 'bold',
-          borderTop: '1px solid black',
-          paddingTop: '2mm'
-        }}>
-          <span>TOTAL:</span>
-          <span>LKR {total.toFixed(2)}</span>
+          justifyContent: 'space-between', 
+          marginBottom: '2mm',
+          color: 'black'
+            }}>
+          <span>Bill Discount ({billDiscount}%):</span>
+          <span>-LKR {billDiscountAmount.toFixed(2)}</span>
+            </div>
+          )}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            borderTop: '1px solid black',
+            paddingTop: '2mm'
+          }}>
+            <span>TOTAL:</span>
+            <span>LKR {total.toFixed(2)}</span>
+          </div>
         </div>
-      </div>
 
-      {/* Divider */}
+        {/* Divider */}
       <div style={{ borderTop: '1px dashed black', margin: '3mm 0' }}></div>
 
       {/* Payment Details */}
