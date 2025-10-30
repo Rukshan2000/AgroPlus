@@ -42,12 +42,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
             }}
           />
         </div>
-        <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '2mm' }}>
-          Green Plus Agro
-        </div>
-        <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
-          Grow Green. Grow Better
-        </div>
+
         <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
           Tel: +94 77 236 5879
         </div>
