@@ -14,7 +14,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
       style={{
         width: '80mm',
         fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: '12px',
+        fontSize: '14px',
         padding: '10mm',
         margin: '0 auto',
         marginLeft: '5mm',
@@ -42,16 +42,16 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
             }}
           />
         </div>
-        <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '2mm' }}>
+        <div style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '2mm' }}>
           Green Plus Agro
         </div>
-        <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
+        <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
           Grow Green. Grow Better
         </div>
-        <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
+        <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
           Tel: +94 77 236 5879
         </div>
-        <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
+        <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
           www.greenplusagro.lk
         </div>
       </div>
@@ -60,7 +60,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
       <div style={{ borderTop: '1px dashed black', margin: '3mm 0' }}></div>
 
       {/* Sale Info */}
-      <div style={{ fontSize: '10px', marginBottom: '3mm' }}>
+      <div style={{ fontSize: '12px', marginBottom: '3mm' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1mm' }}>
           <span>Bill Number:</span>
           <span style={{ fontWeight: 'bold' }}>{saleId || 'N/A'}</span>
@@ -82,13 +82,13 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
       <div style={{ marginBottom: '3mm' }}>
         {cart.map((item, index) => (
           <div key={index} style={{ marginBottom: '3mm' }}>
-            <div style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '1mm' }}>
+            <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '1mm' }}>
               {item.name}
             </div>
             <div style={{ 
               display: 'flex', 
               justifyContent: 'space-between',
-              fontSize: '10px',
+              fontSize: '12px',
               paddingLeft: '2mm'
             }}>
               <span>
@@ -107,7 +107,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
       <div style={{ borderTop: '1px solid black', margin: '3mm 0' }}></div>
 
       {/* Totals */}
-        <div style={{ fontSize: '11px', marginBottom: '3mm' }}>
+        <div style={{ fontSize: '13px', marginBottom: '3mm' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1mm' }}>
             <span>Subtotal:</span>
             <span>LKR {subtotal.toFixed(2)}</span>
@@ -126,7 +126,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
           <div style={{ 
             display: 'flex', 
             justifyContent: 'space-between',
-            fontSize: '14px',
+            fontSize: '16px',
             fontWeight: 'bold',
             borderTop: '1px solid black',
             paddingTop: '2mm'
@@ -141,7 +141,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
 
       {/* Payment Details */}
       {paymentDetails && (
-        <div style={{ fontSize: '11px', marginBottom: '3mm' }}>
+        <div style={{ fontSize: '13px', marginBottom: '3mm' }}>
           <div style={{ 
             display: 'flex', 
             justifyContent: 'space-between',
@@ -170,17 +170,17 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
       {/* Footer */}
       <div style={{ 
         textAlign: 'center', 
-        fontSize: '11px',
+        fontSize: '13px',
         marginTop: '5mm',
         lineHeight: '1.6'
       }}>
         <div style={{ fontWeight: 'bold', marginBottom: '2mm' }}>
           Thank You!
         </div>
-        <div style={{ fontSize: '10px' }}>
+        <div style={{ fontSize: '12px' }}>
           Please Come Again
         </div>
-        <div style={{ fontSize: '9px', marginTop: '3mm', fontStyle: 'italic' }}>
+        <div style={{ fontSize: '11px', marginTop: '3mm', fontStyle: 'italic' }}>
           Your satisfaction is our priority
         </div>
       </div>
