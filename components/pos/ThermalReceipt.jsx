@@ -25,6 +25,21 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
     >
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '5mm' }}>
+        {/* Logo - place your logo at public/assets/logo.png */}
+        <div style={{ marginBottom: '3mm' }}>
+<img
+  src="/assets/logo.png"
+  alt="Green Plus Agro"
+  style={{
+    width: '48mm',
+    maxWidth: '100%',
+    height: 'auto',
+    display: 'inline-block'
+  }}
+  onError={(e) => { e.target.style.display = 'none' }}
+/>
+
+        </div>
         <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '2mm' }}>
           Green Plus Agro
         </div>
@@ -45,7 +60,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
       {/* Sale Info */}
       <div style={{ fontSize: '10px', marginBottom: '3mm' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1mm' }}>
-          <span>Sale ID:</span>
+          <span>Bill Number:</span>
           <span style={{ fontWeight: 'bold' }}>{saleId || 'N/A'}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1mm' }}>
