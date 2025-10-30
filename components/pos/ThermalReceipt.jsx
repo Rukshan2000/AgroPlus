@@ -13,7 +13,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
       id="thermal-receipt" 
       style={{
         width: '80mm',
-        fontFamily: 'monospace',
+        fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: '12px',
         padding: '10mm',
         margin: '0 auto',
