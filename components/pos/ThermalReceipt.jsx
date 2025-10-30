@@ -28,17 +28,23 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
         {/* Logo */}
         <div style={{ marginBottom: '3mm', display: 'flex', justifyContent: 'center' }}>
           <img
-            src="/assets/logo.png"
+            src={`${process.env.NEXT_PUBLIC_APP_URL || ''}/assets/logo.png`}
             alt="Green Plus Agro"
             style={{
               width: '40mm',
               height: 'auto',
               maxWidth: '100%',
+              objectFit: 'contain',
               display: 'block'
             }}
-            onError={(e) => { 
+            onError={(e) => {
+              console.error('Logo failed to load:', e.target.src)
+              // Try without NEXT_PUBLIC_APP_URL if it failed with it
+              if (process.env.NEXT_PUBLIC_APP_URL && e.target.src.startsWith(process.env.NEXT_PUBLIC_APP_URL)) {
+                e.target.src = '/assets/logo.png'
+                return
+              }
               e.target.style.display = 'none'
-              console.log('Logo failed to load')
             }}
           />
         </div>
