@@ -25,26 +25,28 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
     >
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '5mm' }}>
-        {/* Logo - place your logo at public/assets/logo.png */}
-        <div style={{ marginBottom: '3mm' }}>
-<img
-  src="/assets/logo.png"
-  alt="Green Plus Agro"
-  style={{
-    width: '48mm',
-    maxWidth: '100%',
-    height: 'auto',
-    display: 'inline-block'
-  }}
-  onError={(e) => { e.target.style.display = 'none' }}
-/>
-
+        {/* Logo */}
+        <div style={{ marginBottom: '3mm', display: 'flex', justifyContent: 'center' }}>
+          <img
+            src="/assets/logo.png"
+            alt="Green Plus Agro"
+            style={{
+              width: '40mm',
+              height: 'auto',
+              maxWidth: '100%',
+              display: 'block'
+            }}
+            onError={(e) => { 
+              e.target.style.display = 'none'
+              console.log('Logo failed to load')
+            }}
+          />
         </div>
         <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '2mm' }}>
           Green Plus Agro
         </div>
         <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
-         Grow Green Grow Better
+          Grow Green. Grow Better
         </div>
         <div style={{ fontSize: '10px', lineHeight: '1.4' }}>
           Tel: +94 77 236 5879
