@@ -88,8 +88,31 @@ export default function RestockProductModal({
       const csrfResponse = await fetch("/api/auth/csrf")
       const csrfData = await csrfResponse.json()
       
+      const quantityToAdd = parseInt(formData.quantity_added);
+      // First reset stock to match available quantity
+      const currentAvailable = product.available_quantity || 0;
+      
+      // First update to synchronize stock with available
+      await fetch(`/api/products/${product.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfData.csrfToken
+        },
+        body: JSON.stringify({
+          stock_quantity: currentAvailable,
+          available_quantity: currentAvailable
+        })
+      });
+
+      // Now add the new quantity to both
+      const newQuantity = currentAvailable + quantityToAdd;
+      
       const requestBody = {
-        quantity_added: parseInt(formData.quantity_added),
+        quantity_added: quantityToAdd,
+        // Both stock_quantity and available_quantity should be equal after restock
+        stock_quantity: newQuantity,
+        available_quantity: newQuantity,
         expiry_date: formData.expiry_date || null,
         manufacture_date: formData.manufacture_date || null,
         notes: formData.notes || null
@@ -172,11 +195,21 @@ export default function RestockProductModal({
           {/* Product Info */}
           <div className="bg-muted/50 p-3 rounded-lg">
             <div className="font-medium">{product.name}</div>
-            <div className="text-sm text-muted-foreground">
-              Current Stock: {product.stock_quantity || product.available_quantity || 0} units
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">
+                Current Available Quantity: {product.available_quantity || 0} units
+              </div>
+              {product.stock_quantity !== product.available_quantity && (
+                <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-md mt-2">
+                  Note: Stock quantity ({product.stock_quantity || 0}) will be synchronized with available quantity ({product.available_quantity || 0}) before restocking
+                </div>
+              )}
+              <div className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded-md mt-2">
+                New quantities after restock will be: {(product.available_quantity || 0) + parseInt(formData.quantity_added || 0)} units
+              </div>
             </div>
             {product.sku && (
-              <div className="text-sm text-muted-foreground">SKU: {product.sku}</div>
+              <div className="text-sm text-muted-foreground mt-2">SKU: {product.sku}</div>
             )}
           </div>
 
