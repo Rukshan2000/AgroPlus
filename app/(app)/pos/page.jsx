@@ -64,32 +64,89 @@ export default function POSSystem() {
     try {
       // Get printer settings from localStorage
       const printerSettings = JSON.parse(localStorage.getItem('printerSettings') || '{}')
-      const printerName = printerSettings.printerName
+      const printMethod = printerSettings.printMethod || 'browser'
 
-      if (!printerName) {
-        throw new Error('Printer not configured')
+      if (printMethod === 'network' || printMethod === 'webusb') {
+        try {
+          const { openCashDrawer } = await import('@/lib/thermal-printer')
+          
+          const result = await openCashDrawer({
+            preferredMethod: printMethod,
+            printerIP: printerSettings.printerIP,
+            printerPort: printerSettings.printerPort
+          })
+
+          if (result.success) {
+            toast({
+              title: "Success",
+              description: "Cash drawer opened",
+            })
+            return
+          }
+        } catch (directError) {
+          console.error('Direct cash drawer control failed:', directError)
+          // Continue to browser fallback
+        }
       }
 
-      await qz.websocket.connect()
-      const printer = await qz.printers.find(printerName)
-
-      const config = qz.configs.create(printer)
-      // ESC p m t1 t2 command for opening cash drawer
-      const pulse = '\x1B\x70\x00\x3C\x78'
-
-      await qz.print(config, [{ type: 'raw', format: 'command', data: pulse }])
+      // Browser-based fallback using hidden iframe
+      const iframe = document.createElement('iframe')
+      iframe.style.display = 'none'
+      document.body.appendChild(iframe)
       
-      toast({
-        title: "Success",
-        description: "Cash drawer opened",
-      })
-
-      await qz.websocket.disconnect()
+      const iframeDoc = iframe.contentWindow.document
+      
+      // Create a simple document with the cash drawer command
+      iframeDoc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Cash Drawer</title>
+            <style>
+              @page {
+                margin: 0;
+              }
+              @media print {
+                body {
+                  margin: 0;
+                  padding: 0;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            <!-- ESC p command for cash drawer -->
+            <pre style="visibility: hidden;">\x1B\x70\x00\x19\x19</pre>
+          </body>
+        </html>
+      `)
+      iframeDoc.close()
+      
+      iframe.onload = () => {
+        try {
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
+          
+          toast({
+            title: "Success",
+            description: "Cash drawer command sent",
+          })
+          
+          // Clean up iframe after printing
+          setTimeout(() => {
+            document.body.removeChild(iframe)
+          }, 1000)
+        } catch (error) {
+          console.error('Browser print error:', error)
+          document.body.removeChild(iframe)
+          throw error
+        }
+      }
     } catch (error) {
       console.error('Cash drawer error:', error)
       toast({
         title: "Error",
-        description: error.message || "Failed to open cash drawer",
+        description: "Failed to open cash drawer",
         variant: "destructive"
       })
     }
