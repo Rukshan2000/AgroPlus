@@ -1,17 +1,18 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ShoppingCart, CheckCircle, LogOut, Undo2, Printer } from 'lucide-react'
+import { ShoppingCart, CheckCircle, LogOut, Undo2, Printer, DoorOpen } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useSession } from '@/hooks/use-session'
 import ProductInput from '@/components/pos/ProductInput'
 import Cart from '@/components/pos/Cart'
 import Receipt from '@/components/pos/Receipt'
 import ThermalReceipt from '@/components/pos/ThermalReceipt'
+import { Button } from '@/components/ui/button'
+import qz from 'qz-tray'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
 import POSReturnModal from '@/components/pos-return-modal'
 import PaymentModal from '@/components/pos/payment-modal'
-import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
 import ThemeToggle from '@/components/theme-toggle'
 import offlineProductModel from '@/models/offlineProductModel'
@@ -59,6 +60,41 @@ export default function POSSystem() {
     }
   }
 
+  const openCashDrawer = async () => {
+    try {
+      // Get printer settings from localStorage
+      const printerSettings = JSON.parse(localStorage.getItem('printerSettings') || '{}')
+      const printerName = printerSettings.printerName
+
+      if (!printerName) {
+        throw new Error('Printer not configured')
+      }
+
+      await qz.websocket.connect()
+      const printer = await qz.printers.find(printerName)
+
+      const config = qz.configs.create(printer)
+      // ESC p m t1 t2 command for opening cash drawer
+      const pulse = '\x1B\x70\x00\x3C\x78'
+
+      await qz.print(config, [{ type: 'raw', format: 'command', data: pulse }])
+      
+      toast({
+        title: "Success",
+        description: "Cash drawer opened",
+      })
+
+      await qz.websocket.disconnect()
+    } catch (error) {
+      console.error('Cash drawer error:', error)
+      toast({
+        title: "Error",
+        description: error.message || "Failed to open cash drawer",
+        variant: "destructive"
+      })
+    }
+  }
+
   const handlePrintProductList = () => {
     try {
       // Group products by category
@@ -84,17 +120,19 @@ export default function POSSystem() {
             body {
               font-family: Arial, sans-serif;
               margin: 20px;
-              font-size: 14px;
+              font-size: 16px;
             }
             h1 {
               text-align: center;
               color: #059669;
               margin-bottom: 5px;
+              font-size: 24px;
             }
             .subtitle {
               text-align: center;
               color: #666;
               margin-bottom: 20px;
+              font-size: 18px;
             }
             .category {
               margin-top: 25px;
@@ -103,22 +141,24 @@ export default function POSSystem() {
             .category-header {
               background: #059669;
               color: white;
-              padding: 8px 12px;
-              font-size: 16px;
+              padding: 10px 15px;
+              font-size: 20px;
               font-weight: bold;
-              margin-bottom: 10px;
+              margin-bottom: 15px;
+              border-radius: 4px;
             }
             table {
               width: 100%;
               border-collapse: collapse;
-              margin-bottom: 20px;
+              margin-bottom: 25px;
             }
             th {
               background: #f3f4f6;
-              padding: 8px;
+              padding: 12px;
               text-align: left;
               border: 1px solid #ddd;
               font-weight: bold;
+              font-size: 18px;
             }
             td {
               padding: 8px;
@@ -167,9 +207,9 @@ export default function POSSystem() {
         productsByCategory[category].forEach(product => {
           html += `
                 <tr>
-                  <td>${product.product_id}</td>
-                  <td>${product.name}</td>
-                  <td style="text-align: right;">${parseFloat(product.price || 0).toFixed(2)}</td>
+                  <td style="font-size: 16px; font-weight: bold;">${product.id}</td>
+                  <td style="font-size: 16px;">${product.name}</td>
+                  <td style="text-align: right; font-size: 16px;">${parseFloat(product.price || 0).toFixed(2)}</td>
                 </tr>
           `
         })
@@ -924,6 +964,17 @@ export default function POSSystem() {
             >
               <Printer className="h-4 w-4" />
               Print Products
+            </Button>
+
+            {/* Cash Drawer Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={openCashDrawer}
+              className="flex items-center gap-2"
+            >
+              <DoorOpen className="h-4 w-4" />
+              Open Drawer
             </Button>
             
             {/* Session Timer for Cashiers */}
