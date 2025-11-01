@@ -185,7 +185,7 @@ export default function POSSystem() {
       html += `
           <div class="footer">
             <p>Total Products: ${products.length} | Categories: ${Object.keys(productsByCategory).length}</p>
-            <p>Generated on ${new Date().toLocaleString()}</p>
+            <p>Printing Date: ${new Date().toLocaleString()}</p>
           </div>
         </body>
         </html>
