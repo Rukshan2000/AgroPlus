@@ -139,6 +139,38 @@ export default function AddProductModal({
     }
   }
 
+  // Auto-generate SKU based on product name and category
+  const generateSKU = () => {
+    const name = formData.name.trim()
+    const category = formData.category.trim()
+    
+    if (!name) {
+      alert("Please enter product name first")
+      return
+    }
+
+    // Create SKU format: CATEGORY-NAME-RANDOM
+    // Example: FERT-NPK-A1B2 or MIC-ZINC-C3D4
+    
+    const categoryPrefix = category 
+      ? category.split(' ').map(w => w.substring(0, 3).toUpperCase()).join('-')
+      : 'PROD'
+    
+    const namePrefix = name
+      .split(' ')
+      .filter(w => w.length > 0)
+      .slice(0, 3)
+      .map(w => w.substring(0, 2).toUpperCase())
+      .join('-')
+    
+    // Add random alphanumeric suffix
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase()
+    
+    const generatedSKU = `${categoryPrefix}-${namePrefix}-${randomSuffix}`
+    
+    setFormData(prev => ({ ...prev, sku: generatedSKU }))
+  }
+
   const fetchPriceVariations = async (productId) => {
     try {
       const res = await fetch(`/api/products/${productId}/price-variations`)
@@ -407,16 +439,30 @@ export default function AddProductModal({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="sku">SKU / Product Code</Label>
+                  <Label htmlFor="sku" className="flex items-center justify-between">
+                    <span>SKU / Product Code</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={generateSKU}
+                      className="h-6 text-xs"
+                    >
+                      Auto Generate
+                    </Button>
+                  </Label>
                   <Input
                     id="sku"
                     value={formData.sku}
                     onChange={(e) => handleInputChange("sku", e.target.value)}
-                    placeholder="Enter SKU"
+                    placeholder="Click 'Auto Generate' or enter manually"
                     className={errors.sku ? "border-destructive" : ""}
                   />
                   {errors.sku && (
                     <p className="text-sm text-destructive">{errors.sku}</p>
+                  )}
+                  {formData.sku && (
+                    <p className="text-xs text-muted-foreground">SKU: {formData.sku}</p>
                   )}
                 </div>
 

@@ -39,10 +39,10 @@ export async function createProduct({
   const result = await query(`
     INSERT INTO products (
       name, description, price, buying_price, selling_price, sku, category, 
-      stock_quantity, is_active, image_url, created_by, unit_type, unit_value,
+      stock_quantity, available_quantity, is_active, image_url, created_by, unit_type, unit_value,
       expiry_date, manufacture_date, alert_before_days, minimum_quantity
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *
   `, [
     name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, 

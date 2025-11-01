@@ -9,10 +9,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Loader2 } from "lucide-react"
 
 export default function AuthForm({ mode = "login" }) {
   const isLogin = mode === "login"
   const [csrf, setCsrf] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
   const [form, setForm] = useState({ 
     email: "", 
     password: "", 
@@ -34,40 +36,49 @@ export default function AuthForm({ mode = "login" }) {
   async function onSubmit(e) {
     e.preventDefault()
     setError("")
-    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register"
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
-      body: JSON.stringify(form),
-    })
+    setIsLoading(true)
     
-    let data
     try {
-      data = await res.json()
+      const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register"
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-csrf-token": csrf },
+        body: JSON.stringify(form),
+      })
+      
+      let data
+      try {
+        data = await res.json()
+      } catch (error) {
+        setError("Server error - please try again")
+        setIsLoading(false)
+        return
+      }
+      
+      if (!res.ok) {
+        setError(data.error || "Something went wrong")
+        setIsLoading(false)
+        return
+      }
+      
+      // Redirect based on user role
+      if (data.user && data.user.role === 'cashier') {
+        router.replace("/pos")
+      } else {
+        router.replace("/dashboard")
+      }
     } catch (error) {
-      setError("Server error - please try again")
-      return
-    }
-    
-    if (!res.ok) {
-      setError(data.error || "Something went wrong")
-      return
-    }
-    
-    // Redirect based on user role
-    if (data.user && data.user.role === 'cashier') {
-      router.replace("/pos")
-    } else {
-      router.replace("/dashboard")
+      setError("Network error - please try again")
+      setIsLoading(false)
     }
   }
 
   return (
-    <Card className="w-full max-w-md">
-      <CardHeader>
-        <CardTitle>{isLogin ? "Login" : "Register"}</CardTitle>
-        <CardDescription>
-          {isLogin ? "Welcome back! Please log in." : "Create an account to get started."}
+    <Card className="w-full shadow-xl border-0">
+      <CardHeader className="space-y-1 pb-4">
+        <CardTitle className="text-3xl font-bold text-center">{isLogin ? "Welcome Back" : "Create Account"}</CardTitle>
+        <CardDescription className="text-center text-base">
+          {isLogin ? "Enter your credentials to access your account" : "Create an account to get started."}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -132,17 +143,20 @@ export default function AuthForm({ mode = "login" }) {
             </>
           )}
           <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-sm font-medium">Email</Label>
             <Input
               id="email"
               type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               required
+              disabled={isLoading}
+              className="h-11"
+              placeholder="your@email.com"
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password" className="text-sm font-medium">Password</Label>
             <Input
               id="password"
               type="password"
@@ -150,10 +164,24 @@ export default function AuthForm({ mode = "login" }) {
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               required
               minLength={8}
+              disabled={isLoading}
+              className="h-11"
+              placeholder="Enter your password"
             />
           </div>
-          <Button type="submit" className="w-full">
-            {isLogin ? "Login" : "Create account"}
+          <Button 
+            type="submit" 
+            className="w-full h-12 text-base font-semibold mt-2" 
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                {isLogin ? "Signing in..." : "Creating account..."}
+              </>
+            ) : (
+              isLogin ? "Sign In" : "Create Account"
+            )}
           </Button>
           <div className="text-sm text-center text-muted-foreground">
             {isLogin ? (

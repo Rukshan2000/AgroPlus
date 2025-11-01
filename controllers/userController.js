@@ -17,14 +17,27 @@ export async function list() {
 
 export async function changeRole(request, { params }) {
   const session = await getSession()
+  
+  // Check if user is logged in
+  if (!session || !session.user) {
+    return NextResponse.json({ error: "Unauthorized - Please login" }, { status: 401 })
+  }
+  
+  // Check if user is admin
   try {
     requireRoleOrThrow(session, ["admin"])
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: e.status || 403 })
+    return NextResponse.json({ 
+      error: `Forbidden - ${e.message}. Only admin users can change roles.`,
+      currentRole: session.user.role 
+    }, { status: e.status || 403 })
   }
+  
+  // Validate CSRF token
   if (!(await validateCsrf(request.headers))) {
-    return NextResponse.json({ error: "Invalid CSRF token" }, { status: 403 })
+    return NextResponse.json({ error: "Invalid CSRF token - Please refresh the page" }, { status: 403 })
   }
+  
   const id = Number(params.id)
   if (!Number.isInteger(id)) return NextResponse.json({ error: "Invalid user id" }, { status: 400 })
   const body = await request.json().catch(() => ({}))
