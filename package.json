@@ -76,6 +76,7 @@
     "pouchdb-adapter-idb": "^9.0.0",
     "pouchdb-find": "^9.0.0",
     "pouchdb-replication": "^9.0.0",
+    "qz-tray": "^2.2.5",
     "react": "^19",
     "react-barcode": "^1.6.1",
     "react-chartjs-2": "^5.3.0",

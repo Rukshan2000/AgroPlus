@@ -87,6 +87,7 @@ export default function RestockProductModal({
       // Get CSRF token
       const csrfResponse = await fetch("/api/auth/csrf")
       const csrfData = await csrfResponse.json()
+
       
       const quantityToAdd = parseInt(formData.quantity_added);
       // First reset stock to match available quantity

@@ -8,17 +8,22 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Printer, Check, X } from 'lucide-react'
+import { Printer, RefreshCw } from 'lucide-react'
+import { initializeQZTray, getPrinters, disconnectQZTray } from '@/lib/qz-printer'
 
 export function PrinterSettings() {
   const [settings, setSettings] = useState({
-    printMethod: 'browser', // browser, network, webusb, electron
+    printMethod: 'qz-tray', // browser, qz-tray, network, webusb, electron
+    printerName: '',
     printerIP: '',
     printerPort: '9100',
     autoOpenCashDrawer: false,
     autoPrint: false,
     paperWidth: '80mm'
   })
+  const [connected, setConnected] = useState(false)
+  const [printers, setPrinters] = useState([])
+  const [loading, setLoading] = useState(false)
   const [isTesting, setIsTesting] = useState(false)
   const { toast } = useToast()
 
@@ -30,10 +35,62 @@ export function PrinterSettings() {
     }
   }, [])
 
+  useEffect(() => {
+    checkQZTrayConnection()
+    return () => {
+      disconnectQZTray()
+    }
+  }, [])
+
+  const checkQZTrayConnection = async () => {
+    try {
+      const isConnected = await initializeQZTray()
+      setConnected(isConnected)
+      if (isConnected) {
+        loadAvailablePrinters()
+      }
+    } catch (error) {
+      console.error('Failed to connect to QZ Tray:', error)
+      toast({
+        title: "Connection Error",
+        description: "Failed to connect to QZ Tray. Please ensure it's installed and running.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const loadAvailablePrinters = async () => {
+    setLoading(true)
+    try {
+      const availablePrinters = await getPrinters()
+      setPrinters(availablePrinters)
+      
+      // Check if previously selected printer is still available
+      const savedPrinter = localStorage.getItem('selectedPrinter')
+      if (savedPrinter && availablePrinters.includes(savedPrinter)) {
+        setSettings(prev => ({ ...prev, printerName: savedPrinter }))
+      }
+    } catch (error) {
+      console.error('Failed to load printers:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load available printers",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleChange = (field, value) => {
     const newSettings = { ...settings, [field]: value }
     setSettings(newSettings)
     localStorage.setItem('printerSettings', JSON.stringify(newSettings))
+    
+    // If changing print method to qz-tray, check connection
+    if (field === 'printMethod' && value === 'qz-tray') {
+      checkQZTrayConnection()
+    }
   }
 
   const testPrinter = async () => {
@@ -139,10 +196,16 @@ export function PrinterSettings() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="qz-tray">
+                <div className="flex flex-col items-start">
+                  <span className="font-medium">QZ Tray (Recommended)</span>
+                  <span className="text-xs text-muted-foreground">Best for thermal printers & cash drawers</span>
+                </div>
+              </SelectItem>
               <SelectItem value="browser">
                 <div className="flex flex-col items-start">
-                  <span>Browser Print (Default)</span>
-                  <span className="text-xs text-muted-foreground">Uses system print dialog</span>
+                  <span>Browser Print</span>
+                  <span className="text-xs text-muted-foreground">Basic system print dialog</span>
                 </div>
               </SelectItem>
               <SelectItem value="network">
@@ -159,6 +222,60 @@ export function PrinterSettings() {
               </SelectItem>
             </SelectContent>
           </Select>
+          
+          {/* QZ Tray Status */}
+          {settings.printMethod === 'qz-tray' && (
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center space-x-2 bg-muted p-3 rounded-lg">
+                <div className={`h-2 w-2 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="text-sm">
+                  {connected ? 'Connected to QZ Tray' : 'Not connected to QZ Tray'}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto"
+                  onClick={checkQZTrayConnection}
+                  disabled={loading}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+              
+              {connected && (
+                <div className="space-y-2">
+                  <Label>Select Printer</Label>
+                  <Select
+                    value={settings.printerName}
+                    onValueChange={(value) => handleChange('printerName', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a printer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {printers.map((printer) => (
+                        <SelectItem key={printer} value={printer}>
+                          <div className="flex items-center">
+                            <Printer className="h-4 w-4 mr-2 opacity-50" />
+                            {printer}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              
+              {!connected && (
+                <div className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 p-3 rounded-md">
+                  Please ensure QZ Tray is installed and running on your system. 
+                  Download it from <a href="https://qz.io/download/" target="_blank" rel="noopener noreferrer" className="underline">qz.io</a>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Network Printer Settings */}
