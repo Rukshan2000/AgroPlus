@@ -375,7 +375,7 @@ export default function POSSystem() {
     addProductToCart(product, null)
   }
 
-  const addProductToCart = (product, priceVariation = null) => {
+  const addProductToCart = (product, priceVariation = null, incrementByOne = false) => {
     // Check if product is already in cart (with same variation if applicable)
     const variationKey = priceVariation ? `${product.id}-${priceVariation.id}` : product.id
     const existingItemIndex = cart.findIndex(item => {
@@ -385,7 +385,8 @@ export default function POSSystem() {
       return item.id === product.id && !item.variationId
     })
     
-    const qty = parseFloat(quantity) || 0.5 // Changed to 0.5 default
+    // Use 1 for increment clicks, or the manual quantity for manual additions
+    const qty = incrementByOne ? 1 : (parseFloat(quantity) || 1)
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
     const discountPercent = parseFloat(discount) || 0
     const discountAmount = (productPrice * discountPercent) / 100
@@ -402,7 +403,7 @@ export default function POSSystem() {
           description: `Only ${product.available_quantity} units available. Current cart has ${existingItem.quantity}.`,
           variant: "destructive"
         })
-        setQuantity(Math.max(0.5, product.available_quantity - existingItem.quantity).toString())
+        setQuantity(Math.max(0.01, product.available_quantity - existingItem.quantity).toString())
         return
       }
 
@@ -460,7 +461,7 @@ export default function POSSystem() {
     }
 
     setProductId('')
-    setQuantity('0.5') // Changed default to 0.5
+    setQuantity('1') // Reset to 1
     // Don't clear discount automatically - let user keep it for multiple items
 
     // Auto-focus back to product input for next item
@@ -883,11 +884,11 @@ export default function POSSystem() {
       switch(e.key) {
         case '+':
           e.preventDefault()
-          setQuantity(parseFloat((parseFloat(quantity) + 0.5).toFixed(2)).toString())
+          setQuantity(parseFloat((parseFloat(quantity) + 1).toFixed(2)).toString())
           break
         case '-':
           e.preventDefault()
-          setQuantity(Math.max(0.5, parseFloat(quantity) - 0.5).toString())
+          setQuantity(Math.max(1, parseFloat(quantity) - 1).toString())
           break
       }
     }
@@ -1027,7 +1028,7 @@ export default function POSSystem() {
               </label>
               <div className="flex">
                 <button
-                  onClick={() => setQuantity(Math.max(0.5, parseFloat(quantity) - 0.5).toString())}
+                  onClick={() => setQuantity(Math.max(1, parseFloat(quantity) - 1).toString())}
                   className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">−</span>
@@ -1036,12 +1037,12 @@ export default function POSSystem() {
                   type="number"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  step="0.5"
-                  min="0.5"
+                  step="0.01"
+                  min="0.01"
                   className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
                 />
                 <button
-                  onClick={() => setQuantity(parseFloat((parseFloat(quantity) + 0.5).toFixed(2)).toString())}
+                  onClick={() => setQuantity(parseFloat((parseFloat(quantity) + 1).toFixed(2)).toString())}
                   className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">+</span>
@@ -1253,7 +1254,7 @@ export default function POSSystem() {
                       
                       // Check if product is already in cart
                       const existingItemIndex = cart.findIndex(item => item.id === product.id)
-                      const qty = parseFloat(quantity) || 0.5 // Changed to 0.5 default
+                      const qty = 1 // Always increment by 1 when clicking product buttons
                       const productPrice = getProductPrice(product)
                       const discountPercent = parseFloat(discount) || 0
                       const discountAmount = (productPrice * discountPercent) / 100
@@ -1332,7 +1333,7 @@ export default function POSSystem() {
                         })
                       }
 
-                      setQuantity('0.5') // Changed default to 0.5
+                      setQuantity('1') // Keep at 1
                       // Don't clear discount automatically - let user keep it for multiple items
                     }}
                     className={`p-3 hover:shadow-md rounded-lg border-2 text-left transition-all duration-150 transform hover:scale-105 relative ${
@@ -1645,7 +1646,7 @@ export default function POSSystem() {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => updateQuantity(index, parseFloat((item.quantity - 0.5).toFixed(2)))}
+                              onClick={() => updateQuantity(index, parseFloat((item.quantity - 1).toFixed(2)))}
                               className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
                             >
                               −
@@ -1653,14 +1654,14 @@ export default function POSSystem() {
                             <input
                               type="number"
                               value={item.quantity}
-                              onChange={(e) => updateQuantity(index, parseFloat(e.target.value) || 0.5)}
-                              step="0.5"
-                              min="0.5"
+                              onChange={(e) => updateQuantity(index, parseFloat(e.target.value) || 0.01)}
+                              step="0.01"
+                              min="0.01"
                               className="w-12 h-7 text-center text-sm font-mono bg-white dark:bg-black border border-gray-300 dark:border-gray-600 rounded"
                               max={item.availableStock}
                             />
                             <button
-                              onClick={() => updateQuantity(index, parseFloat((item.quantity + 0.5).toFixed(2)))}
+                              onClick={() => updateQuantity(index, parseFloat((item.quantity + 1).toFixed(2)))}
                               className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
                             >
                               +
