@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, Trash2, Plus, Search, QrCode, Package, Upload, Download, Trash } from "lucide-react"
+import { Pencil, Trash2, Plus, Search, QrCode, Package, Upload, Download, Trash, ChevronLeft, ChevronRight } from "lucide-react"
 import AddProductModal from "./add-product-modal"
 import DeleteProductModal from "./delete-product-modal"
 import RestockProductModal from "./restock-product-modal"
@@ -29,6 +29,10 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   // Selection state for bulk operations
   const [selectedProducts, setSelectedProducts] = useState(new Set())
   const [selectAll, setSelectAll] = useState(false)
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
   
   // Modal states
   const [addModalOpen, setAddModalOpen] = useState(false)
@@ -53,14 +57,26 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
     return matchesSearch && matchesCategory && matchesStatus
   })
 
-  // Handle select all
+  // Pagination calculations
+  const totalItems = filteredProducts.length
+  const totalPages = Math.ceil(totalItems / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const currentProducts = filteredProducts.slice(startIndex, endIndex)
+
+  // Reset to first page when filters change
+  useState(() => {
+    setCurrentPage(1)
+  }, [search, categoryFilter, statusFilter, itemsPerPage])
+
+  // Handle select all for current page
   const handleSelectAll = () => {
     if (selectAll) {
       setSelectedProducts(new Set())
       setSelectAll(false)
     } else {
-      const allIds = new Set(filteredProducts.map(p => p.id))
-      setSelectedProducts(allIds)
+      const currentPageIds = new Set(currentProducts.map(p => p.id))
+      setSelectedProducts(currentPageIds)
       setSelectAll(true)
     }
   }
@@ -74,7 +90,38 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       newSelected.add(productId)
     }
     setSelectedProducts(newSelected)
-    setSelectAll(newSelected.size === filteredProducts.length)
+    setSelectAll(newSelected.size === currentProducts.length)
+  }
+
+  // Pagination handlers
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+  }
+
+  const handleItemsPerPageChange = (value) => {
+    setItemsPerPage(Number(value))
+    setCurrentPage(1)
+  }
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages = []
+    const maxVisiblePages = 5
+    
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i)
+      }
+    } else {
+      const startPage = Math.max(1, currentPage - 2)
+      const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+      
+      for (let i = startPage; i <= endPage; i++) {
+        pages.push(i)
+      }
+    }
+    
+    return pages
   }
 
   // Bulk delete handler
@@ -572,6 +619,17 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
+            <SelectTrigger className="w-[120px]">
+              <SelectValue placeholder="Items per page" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10 per page</SelectItem>
+              <SelectItem value="25">25 per page</SelectItem>
+              <SelectItem value="50">50 per page</SelectItem>
+              <SelectItem value="100">100 per page</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Products Table */}
@@ -594,12 +652,12 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             <div>Actions</div>
             <div></div>
           </div>
-          {filteredProducts.length === 0 ? (
+          {currentProducts.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               No products found
             </div>
           ) : (
-            filteredProducts.map((product) => (
+            currentProducts.map((product) => (
               <div key={product.id} className="grid grid-cols-10 items-center py-3 border-b last:border-b-0">
                 <div className="flex items-center">
                   <Checkbox
@@ -679,6 +737,45 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             ))
           )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6">
+            <div className="text-sm text-muted-foreground">
+              Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} products
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              
+              {getPageNumbers().map((page) => (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handlePageChange(page)}
+                >
+                  {page}
+                </Button>
+              ))}
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
 
       {/* Add Product Modal */}

@@ -167,7 +167,7 @@ export default function POSSystem() {
         productsByCategory[category].forEach(product => {
           html += `
                 <tr>
-                  <td>${product.product_id}</td>
+                  <td>${product.id}</td>
                   <td>${product.name}</td>
                   <td style="text-align: right;">${parseFloat(product.price || 0).toFixed(2)}</td>
                 </tr>
@@ -376,7 +376,7 @@ export default function POSSystem() {
       return item.id === product.id && !item.variationId
     })
     
-    const qty = parseInt(quantity) || 1
+    const qty = parseFloat(quantity) || 0.5 // Changed to 0.5 default
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
     const discountPercent = parseFloat(discount) || 0
     const discountAmount = (productPrice * discountPercent) / 100
@@ -385,7 +385,7 @@ export default function POSSystem() {
     if (existingItemIndex >= 0) {
       // Product already in cart, increase quantity
       const existingItem = cart[existingItemIndex]
-      const newQuantity = existingItem.quantity + qty
+      const newQuantity = parseFloat((existingItem.quantity + qty).toFixed(2)) // Round to 2 decimal places
       
       if (newQuantity > product.available_quantity) {
         toast({
@@ -393,7 +393,7 @@ export default function POSSystem() {
           description: `Only ${product.available_quantity} units available. Current cart has ${existingItem.quantity}.`,
           variant: "destructive"
         })
-        setQuantity(Math.max(1, product.available_quantity - existingItem.quantity).toString())
+        setQuantity(Math.max(0.5, product.available_quantity - existingItem.quantity).toString())
         return
       }
 
@@ -403,7 +403,7 @@ export default function POSSystem() {
           ? { 
               ...item, 
               quantity: newQuantity, 
-              total: finalPrice * newQuantity,
+              total: parseFloat((finalPrice * newQuantity).toFixed(2)),
               discount: discountPercent, // Update discount if changed
               unitPrice: finalPrice // Update unit price if discount changed
             }
@@ -437,7 +437,7 @@ export default function POSSystem() {
         quantity: qty,
         discount: discountPercent,
         unitPrice: finalPrice,
-        total: finalPrice * qty,
+        total: parseFloat((finalPrice * qty).toFixed(2)),
         availableStock: product.available_quantity
       }
 
@@ -451,7 +451,7 @@ export default function POSSystem() {
     }
 
     setProductId('')
-    setQuantity('1')
+    setQuantity('0.5') // Changed default to 0.5
     // Don't clear discount automatically - let user keep it for multiple items
 
     // Auto-focus back to product input for next item
@@ -494,15 +494,15 @@ export default function POSSystem() {
     
     setCart(prev => prev.map((item, i) => 
       i === index 
-        ? { ...item, quantity: newQty, total: item.unitPrice * newQty }
+        ? { ...item, quantity: newQty, total: parseFloat((item.unitPrice * newQty).toFixed(2)) }
         : item
     ))
   }
 
-  const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
+  const subtotal = parseFloat(cart.reduce((sum, item) => sum + item.total, 0).toFixed(2))
   const billDiscountPercent = parseFloat(billDiscount) || 0
-  const billDiscountAmount = (subtotal * billDiscountPercent) / 100
-  const total = subtotal - billDiscountAmount
+  const billDiscountAmount = parseFloat(((subtotal * billDiscountPercent) / 100).toFixed(2))
+  const total = parseFloat((subtotal - billDiscountAmount).toFixed(2))
 
   const printBill = async () => {
     // Get printer settings from localStorage
@@ -687,7 +687,7 @@ export default function POSSystem() {
           unit_price: item.unitPrice,
           original_price: item.originalPrice,
           discount_percentage: item.discount,
-          discount_amount: (item.originalPrice - item.unitPrice) * item.quantity,
+          discount_amount: parseFloat(((item.originalPrice - item.unitPrice) * item.quantity).toFixed(2)),
           total_amount: item.total,
           buying_price: item.buying_price || 0 // Include buying price for profit calculation
         })),
@@ -874,11 +874,11 @@ export default function POSSystem() {
       switch(e.key) {
         case '+':
           e.preventDefault()
-          setQuantity((parseInt(quantity) + 1).toString())
+          setQuantity(parseFloat((parseFloat(quantity) + 0.5).toFixed(2)).toString())
           break
         case '-':
           e.preventDefault()
-          setQuantity(Math.max(1, parseInt(quantity) - 1).toString())
+          setQuantity(Math.max(0.5, parseFloat(quantity) - 0.5).toString())
           break
       }
     }
@@ -1018,7 +1018,7 @@ export default function POSSystem() {
               </label>
               <div className="flex">
                 <button
-                  onClick={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
+                  onClick={() => setQuantity(Math.max(0.5, parseFloat(quantity) - 0.5).toString())}
                   className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">−</span>
@@ -1027,11 +1027,12 @@ export default function POSSystem() {
                   type="number"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
+                  step="0.5"
+                  min="0.5"
                   className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                  min="1"
                 />
                 <button
-                  onClick={() => setQuantity((parseInt(quantity) + 1).toString())}
+                  onClick={() => setQuantity(parseFloat((parseFloat(quantity) + 0.5).toFixed(2)).toString())}
                   className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">+</span>
@@ -1242,7 +1243,7 @@ export default function POSSystem() {
                       
                       // Check if product is already in cart
                       const existingItemIndex = cart.findIndex(item => item.id === product.id)
-                      const qty = parseInt(quantity) || 1
+                      const qty = parseFloat(quantity) || 0.5 // Changed to 0.5 default
                       const productPrice = getProductPrice(product)
                       const discountPercent = parseFloat(discount) || 0
                       const discountAmount = (productPrice * discountPercent) / 100
@@ -1260,7 +1261,7 @@ export default function POSSystem() {
                       if (existingItemIndex >= 0) {
                         // Product already in cart, increase quantity
                         const existingItem = cart[existingItemIndex]
-                        const newQuantity = existingItem.quantity + qty
+                        const newQuantity = parseFloat((existingItem.quantity + qty).toFixed(2)) // Round to 2 decimal places
                         
                         if (newQuantity > product.available_quantity) {
                           toast({
@@ -1277,7 +1278,7 @@ export default function POSSystem() {
                             ? { 
                                 ...item, 
                                 quantity: newQuantity, 
-                                total: finalPrice * newQuantity,
+                                total: parseFloat((finalPrice * newQuantity).toFixed(2)),
                                 discount: discountPercent, // Update discount if changed
                                 unitPrice: finalPrice // Update unit price if discount changed
                               }
@@ -1308,7 +1309,7 @@ export default function POSSystem() {
                           quantity: qty,
                           discount: discountPercent,
                           unitPrice: finalPrice,
-                          total: finalPrice * qty,
+                          total: parseFloat((finalPrice * qty).toFixed(2)),
                           availableStock: product.available_quantity
                         }
 
@@ -1321,7 +1322,7 @@ export default function POSSystem() {
                         })
                       }
 
-                      setQuantity('1')
+                      setQuantity('0.5') // Changed default to 0.5
                       // Don't clear discount automatically - let user keep it for multiple items
                     }}
                     className={`p-3 hover:shadow-md rounded-lg border-2 text-left transition-all duration-150 transform hover:scale-105 relative ${
@@ -1422,7 +1423,7 @@ export default function POSSystem() {
           {/* Cart & Checkout - 4 columns */}
           <div className="col-span-4">
             <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5" />
                 Cart ({cart.length} items)
               </h3>
@@ -1456,7 +1457,7 @@ export default function POSSystem() {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => updateQuantity(index, item.quantity - 1)}
+                              onClick={() => updateQuantity(index, parseFloat((item.quantity - 0.5).toFixed(2)))}
                               className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
                             >
                               −
@@ -1464,13 +1465,14 @@ export default function POSSystem() {
                             <input
                               type="number"
                               value={item.quantity}
-                              onChange={(e) => updateQuantity(index, parseInt(e.target.value) || 1)}
+                              onChange={(e) => updateQuantity(index, parseFloat(e.target.value) || 0.5)}
+                              step="0.5"
+                              min="0.5"
                               className="w-12 h-7 text-center text-sm font-mono bg-white dark:bg-black border border-gray-300 dark:border-gray-600 rounded"
-                              min="1"
                               max={item.availableStock}
                             />
                             <button
-                              onClick={() => updateQuantity(index, item.quantity + 1)}
+                              onClick={() => updateQuantity(index, parseFloat((item.quantity + 0.5).toFixed(2)))}
                               className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
                             >
                               +
