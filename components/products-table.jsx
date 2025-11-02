@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -33,6 +33,8 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(10)
+  const [totalItems, setTotalItems] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
   
   // Modal states
   const [addModalOpen, setAddModalOpen] = useState(false)
@@ -43,30 +45,54 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const [bulkBarcodeModalOpen, setBulkBarcodeModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = !search || 
-      product.name.toLowerCase().includes(search.toLowerCase()) ||
-      product.description?.toLowerCase().includes(search.toLowerCase()) ||
-      product.sku?.toLowerCase().includes(search.toLowerCase())
-    
-    const matchesCategory = categoryFilter === "all" || product.category === categoryFilter
-    const matchesStatus = statusFilter === "all" || 
-      (statusFilter === "active" && product.is_active) ||
-      (statusFilter === "inactive" && !product.is_active)
+  // Fetch products from server with pagination
+  const fetchProducts = async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: itemsPerPage.toString(),
+      })
 
-    return matchesSearch && matchesCategory && matchesStatus
-  })
+      if (search) params.append('search', search)
+      if (categoryFilter !== 'all') params.append('category', categoryFilter)
+      if (statusFilter !== 'all') {
+        params.append('is_active', statusFilter === 'active' ? 'true' : 'false')
+      }
 
-  // Pagination calculations
-  const totalItems = filteredProducts.length
-  const totalPages = Math.ceil(totalItems / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const currentProducts = filteredProducts.slice(startIndex, endIndex)
+      const response = await fetch(`/api/products?${params.toString()}`)
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch products')
+      }
+
+      const data = await response.json()
+      
+      setProducts(data.products || [])
+      setTotalItems(data.total || 0)
+      setTotalPages(data.totalPages || 0)
+    } catch (error) {
+      console.error('Error fetching products:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch products from server",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch products when filters or pagination changes
+  useEffect(() => {
+    fetchProducts()
+  }, [currentPage, itemsPerPage, search, categoryFilter, statusFilter])
 
   // Reset to first page when filters change
-  useState(() => {
-    setCurrentPage(1)
+  useEffect(() => {
+    if (currentPage !== 1) {
+      setCurrentPage(1)
+    }
   }, [search, categoryFilter, statusFilter, itemsPerPage])
 
   // Handle select all for current page
@@ -75,7 +101,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       setSelectedProducts(new Set())
       setSelectAll(false)
     } else {
-      const currentPageIds = new Set(currentProducts.map(p => p.id))
+      const currentPageIds = new Set(products.map(p => p.id))
       setSelectedProducts(currentPageIds)
       setSelectAll(true)
     }
@@ -90,18 +116,26 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       newSelected.add(productId)
     }
     setSelectedProducts(newSelected)
-    setSelectAll(newSelected.size === currentProducts.length)
+    setSelectAll(newSelected.size === products.length)
   }
 
   // Pagination handlers
   const handlePageChange = (page) => {
     setCurrentPage(page)
+    setSelectedProducts(new Set()) // Clear selection on page change
+    setSelectAll(false)
   }
 
   const handleItemsPerPageChange = (value) => {
     setItemsPerPage(Number(value))
     setCurrentPage(1)
+    setSelectedProducts(new Set()) // Clear selection
+    setSelectAll(false)
   }
+
+  // Calculate display indices
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
 
   // Generate page numbers for pagination
   const getPageNumbers = () => {
@@ -164,6 +198,9 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       setProducts(prev => prev.filter(p => !selectedProducts.has(p.id)))
       setSelectedProducts(new Set())
       setSelectAll(false)
+      
+      // Refresh to get updated data
+      fetchProducts()
 
       toast({
         title: "Success",
@@ -206,7 +243,8 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       })
 
       if (res.ok) {
-        setProducts(products.filter(p => p.id !== productId))
+        // Refresh products from server
+        fetchProducts()
       } else {
         const err = await res.json().catch(() => ({}))
         alert(err.error || "Failed to delete product")
@@ -342,9 +380,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
               }
 
               // Refresh products list
-              const productsResponse = await fetch("/api/products?limit=100")
-              const productsData = await productsResponse.json()
-              setProducts(productsData.products)
+              fetchProducts()
             }
           } catch (error) {
             console.error("Import error:", error)
@@ -506,18 +542,22 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
 
   const handleProductSuccess = (product, action) => {
     if (action === 'created') {
-      setProducts(prev => [product, ...prev])
+      // Refresh from server to get accurate data
+      fetchProducts()
     } else if (action === 'updated') {
-      setProducts(prev => prev.map(p => p.id === product.id ? product : p))
+      // Refresh from server to get accurate data
+      fetchProducts()
     }
   }
 
   const handleRestockSuccess = (product) => {
-    setProducts(prev => prev.map(p => p.id === product.id ? product : p))
+    // Refresh from server to get updated stock
+    fetchProducts()
   }
 
   const handleDeleteSuccess = (productId) => {
-    setProducts(prev => prev.filter(p => p.id !== productId))
+    // Refresh from server
+    fetchProducts()
   }
 
   const formatPrice = (price) => {
@@ -652,12 +692,16 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             <div>Actions</div>
             <div></div>
           </div>
-          {currentProducts.length === 0 ? (
+          {loading ? (
+            <div className="py-8 text-center text-muted-foreground">
+              Loading products...
+            </div>
+          ) : products.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               No products found
             </div>
           ) : (
-            currentProducts.map((product) => (
+            products.map((product) => (
               <div key={product.id} className="grid grid-cols-10 items-center py-3 border-b last:border-b-0">
                 <div className="flex items-center">
                   <Checkbox
@@ -822,7 +866,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       <BulkBarcodeSticker
         isOpen={bulkBarcodeModalOpen}
         onClose={() => setBulkBarcodeModalOpen(false)}
-        products={filteredProducts}
+        products={products}
       />
     </Card>
   )

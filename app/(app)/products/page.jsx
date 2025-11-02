@@ -5,7 +5,8 @@ async function fetchProducts() {
   try {
     const cookieStore = await cookies()
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const res = await fetch(`${baseUrl}/api/products`, {
+    // Fetch first page with default limit, client will handle pagination
+    const res = await fetch(`${baseUrl}/api/products?page=1&limit=10`, {
       cache: 'no-store',
       headers: {
         Cookie: cookieStore.toString()
