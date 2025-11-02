@@ -188,17 +188,64 @@ export async function bulkDeleteProducts(ids) {
 
 export function getAvailableUnits() {
   return [
+    // Weight
     { value: 'kg', label: 'Kilograms (kg)' },
     { value: 'g', label: 'Grams (g)' },
+    { value: 'mg', label: 'Milligrams (mg)' },
+    { value: 'ton', label: 'Tons (ton)' },
+    { value: 'lb', label: 'Pounds (lb)' },
+    { value: 'oz', label: 'Ounces (oz)' },
+
+    // Volume
     { value: 'l', label: 'Liters (l)' },
     { value: 'ml', label: 'Milliliters (ml)' },
+    { value: 'gal', label: 'Gallons (gal)' },
+    { value: 'pt', label: 'Pints (pt)' },
+    { value: 'qt', label: 'Quarts (qt)' },
+
+    // Length / Area / Dimension
+    { value: 'm', label: 'Meters (m)' },
+    { value: 'cm', label: 'Centimeters (cm)' },
+    { value: 'mm', label: 'Millimeters (mm)' },
+    { value: 'ft', label: 'Feet (ft)' },
+    { value: 'in', label: 'Inches (in)' },
+    { value: 'sqft', label: 'Square Feet (sqft)' },
+    { value: 'sqm', label: 'Square Meters (sqm)' },
+
+    // Count / Quantity
     { value: 'items', label: 'Items' },
     { value: 'pcs', label: 'Pieces' },
-    { value: 'bags', label: 'Bags' },
+    { value: 'units', label: 'Units' },
+    { value: 'packs', label: 'Packs' },
+    { value: 'boxes', label: 'Boxes' },
     { value: 'bottles', label: 'Bottles' },
-    { value: 'packets', label: 'Packets' }
+    { value: 'bags', label: 'Bags' },
+    { value: 'sachets', label: 'Sachets' },
+    { value: 'cartons', label: 'Cartons' },
+    { value: 'dozen', label: 'Dozen' },
+    { value: 'pair', label: 'Pair' },
+    { value: 'rolls', label: 'Rolls' },
+    { value: 'barrels', label: 'Barrels' },
+    { value: 'drums', label: 'Drums' },
+    { value: 'packets', label: 'Packets' },
+    { value: 'trays', label: 'Trays' },
+    { value: 'containers', label: 'Containers' },
+    { value: 'sheets', label: 'Sheets' },
+    { value: 'tubes', label: 'Tubes' },
+    { value: 'bundles', label: 'Bundles' },
+
+    // Agricultural / Misc
+    { value: 'bunch', label: 'Bunch' },
+    { value: 'litre', label: 'Litre (litre)' },
+    { value: 'acre', label: 'Acre' },
+    { value: 'hectare', label: 'Hectare' },
+    { value: 'plant', label: 'Plant' },
+    { value: 'seed', label: 'Seed' },
+    { value: 'sack', label: 'Sack' },
+    { value: 'crate', label: 'Crate' },
   ]
 }
+
 
 export async function updateProductQuantities(id, { sold_quantity, available_quantity }) {
   const result = await query(`
