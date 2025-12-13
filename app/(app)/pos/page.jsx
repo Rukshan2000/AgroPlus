@@ -14,8 +14,7 @@ import PaymentModal from '@/components/pos/payment-modal'
 import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
 import ThemeToggle from '@/components/theme-toggle'
-import offlineProductModel from '@/models/offlineProductModel'
-import offlineSalesModel from '@/models/offlineSalesModel'
+import ScreenSizeChanger from '@/components/pos/screen-size-changer'
 
 export default function POSSystem() {
   const [cart, setCart] = useState([])
@@ -262,20 +261,12 @@ export default function POSSystem() {
 
   const loadProducts = async () => {
     try {
-      // Try offline first, then fallback to API if online
-      const offlineResult = await offlineProductModel.findAll({ limit: 100 });
-      
-      if (offlineResult.success && offlineResult.products.length > 0) {
-        // Filter active products
-        const activeProducts = offlineResult.products.filter(p => p.is_active !== false);
-        setProducts(activeProducts);
+      const response = await fetch('/api/products?limit=100&is_active=true');
+      if (response.ok) {
+        const data = await response.json();
+        setProducts(data.products || []);
       } else {
-        // Fallback to API if no offline data
-        const response = await fetch('/api/products?limit=100&is_active=true');
-        if (response.ok) {
-          const data = await response.json();
-          setProducts(data.products || []);
-        }
+        throw new Error('Failed to fetch products');
       }
     } catch (error) {
       toast({
@@ -712,55 +703,28 @@ export default function POSSystem() {
         cashier_name: session?.user?.name
       }
 
-      // Try offline storage first
-      const offlineResult = await offlineSalesModel.createSale(saleData);
-      
-      if (offlineResult.success) {
-        // Update local product stock
-        const stockUpdates = cart.map(item => ({
-          productId: item.id,
-          quantity: item.quantity,
-          operation: 'subtract'
-        }));
-        
-        await offlineProductModel.bulkUpdateStock(stockUpdates);
-        
-        // Set sale ID from offline result
-        const offlineSaleId = offlineResult.sale && offlineResult.sale._id ? offlineResult.sale._id : `OFF-${Date.now()}`
-        setSaleId(offlineSaleId)
+      const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(saleData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Set sale ID from API response - use first sale ID or generate one
+        const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
+        setSaleId(firstSaleId || `SALE-${Date.now()}`)
         setShowBill(true);
         toast({
           title: "Sale completed",
-          description: "Transaction saved locally and will sync when online"
+          description: "Transaction processed successfully"
         });
-        
-        // Reload products to show updated stock
         loadProducts();
       } else {
-        // Fallback to API if offline storage fails
-        const response = await fetch('/api/sales', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(saleData)
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          // Set sale ID from API response - use first sale ID or generate one
-          const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
-          setSaleId(firstSaleId || `SALE-${Date.now()}`)
-          setShowBill(true);
-          toast({
-            title: "Sale completed",
-            description: "Transaction processed successfully"
-          });
-          loadProducts();
-        } else {
-          const error = await response.json();
-          throw new Error(error.message || 'Failed to process sale');
-        }
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to process sale');
       }
     } catch (error) {
       toast({
@@ -820,6 +784,43 @@ export default function POSSystem() {
       if (e.ctrlKey && e.key === 'l' && isCashier) {
         e.preventDefault()
         handleLogout()
+        return
+      }
+
+      // Ctrl++ - Zoom In
+      if (e.ctrlKey && (e.key === '+' || e.key === '=')) {
+        e.preventDefault()
+        const currentZoom = parseInt(localStorage.getItem('pos-zoom') || '100')
+        const newZoom = Math.min(currentZoom + 10, 200)
+        document.documentElement.style.fontSize = `${(newZoom / 100) * 16}px`
+        document.body.style.transform = `scale(${newZoom / 100})`
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = `${100 / (newZoom / 100)}%`
+        localStorage.setItem('pos-zoom', newZoom)
+        return
+      }
+
+      // Ctrl+- - Zoom Out
+      if (e.ctrlKey && e.key === '-') {
+        e.preventDefault()
+        const currentZoom = parseInt(localStorage.getItem('pos-zoom') || '100')
+        const newZoom = Math.max(currentZoom - 10, 80)
+        document.documentElement.style.fontSize = `${(newZoom / 100) * 16}px`
+        document.body.style.transform = `scale(${newZoom / 100})`
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = `${100 / (newZoom / 100)}%`
+        localStorage.setItem('pos-zoom', newZoom)
+        return
+      }
+
+      // Ctrl+0 - Reset Zoom
+      if (e.ctrlKey && e.key === '0') {
+        e.preventDefault()
+        document.documentElement.style.fontSize = '16px'
+        document.body.style.transform = 'scale(1)'
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = '100%'
+        localStorage.setItem('pos-zoom', '100')
         return
       }
       
@@ -935,6 +936,9 @@ export default function POSSystem() {
               <Printer className="h-4 w-4" />
               Print Products
             </Button>
+
+            {/* Screen Size Changer */}
+            <ScreenSizeChanger />
             
             {/* Session Timer for Cashiers */}
             {isCashier && (
@@ -952,12 +956,14 @@ export default function POSSystem() {
               </div>
             )}
             {/* Keyboard Shortcuts Help */}
-            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-3 hidden lg:flex">
+            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-2 hidden xl:flex flex-wrap gap-2">
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+Q</kbd> Product</span>
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+↵</kbd> Sale</span>
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+K</kbd> Clear</span>
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+/</kbd> Search</span>
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">←→↑↓</kbd> Navigate</span>
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl++</kbd> Zoom In</span>
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+−</kbd> Zoom Out</span>
               {isCashier && <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+L</kbd> Logout</span>}
             </div>
             
@@ -1219,19 +1225,19 @@ export default function POSSystem() {
                       onClick={() => {setSortBy('popularity'); setSortOrder('desc')}}
                       className={`px-2 py-1 text-xs rounded ${sortBy === 'popularity' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
-                      🔥 Hot
+                      Hot
                     </button>
                     <button
                       onClick={() => {setSortBy('price'); setSortOrder('asc')}}
                       className={`px-2 py-1 text-xs rounded ${sortBy === 'price' && sortOrder === 'asc' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
-                      💰 Cheap
+                      Cheap
                     </button>
                     <button
                       onClick={() => {setSortBy('name'); setSortOrder('asc')}}
                       className={`px-2 py-1 text-xs rounded ${sortBy === 'name' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
-                      🔤 A-Z
+                      A-Z
                     </button>
                   </div>
                 </div>
@@ -1388,7 +1394,7 @@ export default function POSSystem() {
               {/* Quick Add Shopping Bags */}
               <div className="mb-3 p-2 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-200 dark:border-orange-800">
                 <div className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-2">
-                  🛍️ Quick Add Bags
+                  Quick Add Bags
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {/* Medium Bag Button */}
