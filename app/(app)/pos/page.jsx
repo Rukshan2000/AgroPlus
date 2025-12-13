@@ -1248,18 +1248,10 @@ export default function POSSystem() {
                   <button
                     key={product.id}
                     data-product-index={index}
-                    onClick={() => {
+                    onClick={async () => {
                       // Update selected index on click
                       setSelectedProductIndex(index)
                       
-                      // Check if product is already in cart
-                      const existingItemIndex = cart.findIndex(item => item.id === product.id)
-                      const qty = 1 // Always increment by 1 when clicking product buttons
-                      const productPrice = getProductPrice(product)
-                      const discountPercent = parseFloat(discount) || 0
-                      const discountAmount = (productPrice * discountPercent) / 100
-                      const finalPrice = productPrice - discountAmount
-
                       if (product.available_quantity <= 0) {
                         toast({
                           title: "Out of stock",
@@ -1269,72 +1261,26 @@ export default function POSSystem() {
                         return
                       }
 
-                      if (existingItemIndex >= 0) {
-                        // Product already in cart, increase quantity
-                        const existingItem = cart[existingItemIndex]
-                        const newQuantity = parseFloat((existingItem.quantity + qty).toFixed(2)) // Round to 2 decimal places
-                        
-                        if (newQuantity > product.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${product.available_quantity} units available. Current cart has ${existingItem.quantity}.`,
-                            variant: "destructive"
-                          })
-                          return
+                      // Check if product has price variations
+                      try {
+                        const res = await fetch(`/api/products/${product.id}/price-variations/active`)
+                        if (res.ok) {
+                          const data = await res.json()
+                          const variations = data.variations || []
+                          
+                          if (variations.length > 0) {
+                            // Show price variation modal
+                            setSelectedProductForVariation(product)
+                            setShowPriceVariationModal(true)
+                            return
+                          }
                         }
-
-                        // Update existing item quantity
-                        setCart(prev => prev.map((item, index) => 
-                          index === existingItemIndex 
-                            ? { 
-                                ...item, 
-                                quantity: newQuantity, 
-                                total: parseFloat((finalPrice * newQuantity).toFixed(2)),
-                                discount: discountPercent, // Update discount if changed
-                                unitPrice: finalPrice // Update unit price if discount changed
-                              }
-                            : item
-                        ))
-
-                        toast({
-                          title: "Quantity updated",
-                          description: `${product.name} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
-                          duration: 1000
-                        })
-                      } else {
-                        // Product not in cart, add new item
-                        if (qty > product.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${product.available_quantity} units available`,
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        const cartItem = {
-                          id: product.id,
-                          sku: product.sku,
-                          name: product.name,
-                          originalPrice: productPrice,
-                          quantity: qty,
-                          discount: discountPercent,
-                          unitPrice: finalPrice,
-                          total: parseFloat((finalPrice * qty).toFixed(2)),
-                          availableStock: product.available_quantity
-                        }
-
-                        setCart(prev => [...prev, cartItem])
-
-                        toast({
-                          title: "Added to cart",
-                          description: `${product.name} × ${qty}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
-                          duration: 1000
-                        })
+                      } catch (error) {
+                        console.error('Error checking price variations:', error)
                       }
 
-                      setQuantity('1') // Keep at 1
-                      // Don't clear discount automatically - let user keep it for multiple items
+                      // No price variations, proceed with normal flow
+                      addProductToCart(product, null, true)
                     }}
                     className={`p-3 hover:shadow-md rounded-lg border-2 text-left transition-all duration-150 transform hover:scale-105 relative ${
                       // Keyboard navigation highlight
