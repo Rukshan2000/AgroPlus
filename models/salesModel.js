@@ -68,7 +68,7 @@ export async function listSales({ page = 1, limit = 10, start_date, end_date, pr
   const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
 
   const result = await query(`
-    SELECT s.*, p.sku, p.category, u.name as sold_by
+    SELECT s.*, p.sku, p.category, p.return, u.name as sold_by
     FROM sales s
     LEFT JOIN products p ON s.product_id = p.id
     LEFT JOIN users u ON s.created_by = u.id
@@ -94,7 +94,7 @@ export async function listSales({ page = 1, limit = 10, start_date, end_date, pr
 
 export async function getSaleById(id) {
   const result = await query(`
-    SELECT s.*, p.sku, p.category, u.name as sold_by
+    SELECT s.*, p.sku, p.category, p.return, u.name as sold_by
     FROM sales s
     LEFT JOIN products p ON s.product_id = p.id
     LEFT JOIN users u ON s.created_by = u.id

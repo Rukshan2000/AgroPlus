@@ -145,7 +145,8 @@ export async function createProduct(productData) {
     expiry_date = null,
     manufacture_date = null,
     alert_before_days = 7,
-    minimum_quantity = 5
+    minimum_quantity = 5,
+    return: allowReturn = true
   } = productData
   
   const finalSellingPrice = determineSellingPrice(price, selling_price)
@@ -155,15 +156,15 @@ export async function createProduct(productData) {
       name, description, price, buying_price, selling_price, sku, category, 
       stock_quantity, available_quantity, is_active, image_url, created_by, 
       unit_type, unit_value, expiry_date, manufacture_date, alert_before_days, 
-      minimum_quantity
+      minimum_quantity, return
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     RETURNING *
   `, [
     name, description, finalSellingPrice, buying_price, finalSellingPrice, 
     sku, category, stock_quantity, stock_quantity, is_active, image_url, created_by, 
     unit_type, unit_value, expiry_date, manufacture_date, alert_before_days, 
-    minimum_quantity
+    minimum_quantity, allowReturn
   ]);
   
   return result.rows[0]
@@ -230,7 +231,8 @@ export async function updateProduct(id, updateData) {
     expiry_date,
     manufacture_date,
     alert_before_days,
-    minimum_quantity
+    minimum_quantity,
+    return: allowReturn
   } = updateData
   
   const finalSellingPrice = determineSellingPrice(price, selling_price)
@@ -253,13 +255,14 @@ export async function updateProduct(id, updateData) {
       manufacture_date = $14,
       alert_before_days = $15,
       minimum_quantity = $16,
+      return = $17,
       updated_at = NOW()
-    WHERE id = $17
+    WHERE id = $18
     RETURNING *
   `, [
     name, description, finalSellingPrice, buying_price, finalSellingPrice, 
     sku, category, stock_quantity, is_active, image_url, unit_type, unit_value,
-    expiry_date, manufacture_date, alert_before_days, minimum_quantity, id
+    expiry_date, manufacture_date, alert_before_days, minimum_quantity, allowReturn, id
   ])
   
   return result.rows[0] || null
