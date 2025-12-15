@@ -30,7 +30,7 @@ A production-ready Next.js SaaS application with PostgreSQL database, authentica
    DB_DATABASE=saas
    DB_USERNAME=postgres
    DB_PASSWORD=1998
-   DATABASE_URL="postgresql://postgres:1998@127.0.0.1:5432/saas"
+   NEXT_PUBLIC_DATABASE_URL="postgresql://postgres:1998@127.0.0.1:5432/saas"
    NEXT_PUBLIC_APP_URL="http://localhost:3000"
    ```
 
@@ -85,7 +85,7 @@ The application will be available at [http://localhost:3000](http://localhost:30
 \`\`\`
 
 2. Configure env
-Copy `.env.example` to `.env` and fill `DATABASE_URL`.
+Copy `.env.example` to `.env` and fill `NEXT_PUBLIC_DATABASE_URL`.
 
 3. Run DB migrations
 \`\`\`
@@ -200,12 +200,12 @@ README.md
 
 ## Deployment
 
-- Vercel: Use `DATABASE_URL` from Neon or Supabase. Next.js App Router deploys seamlessly [^1]. 
-- Heroku: Add `@neondatabase/serverless` compatible `DATABASE_URL` (or standard Postgres), set env vars, run:
+- Vercel: Use `NEXT_PUBLIC_DATABASE_URL` from Neon or Supabase. Next.js App Router deploys seamlessly [^1]. 
+- Heroku: Add `@neondatabase/serverless` compatible `NEXT_PUBLIC_DATABASE_URL` (or standard Postgres), set env vars, run:
   \`\`\`
   npm run migrate && npm run seed
   \`\`\`
-- Add build and start commands to package.json. Ensure `DATABASE_URL` is configured.
+- Add build and start commands to package.json. Ensure `NEXT_PUBLIC_DATABASE_URL` is configured.
 
 ## Testing
 
@@ -217,7 +217,7 @@ Includes examples for password hashing and RBAC on users controller.
 
 ## Common Pitfalls
 
-- Missing `DATABASE_URL`: migrations will fail
+- Missing `NEXT_PUBLIC_DATABASE_URL`: migrations will fail
 - Not sending `x-csrf-token` on PATCH/POST to protected routes
 - Attempting to access /users without proper role -> 403 by design
 - Ensure cookies work over HTTPS in production (`secure: true`)

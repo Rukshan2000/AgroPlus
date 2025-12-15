@@ -5,12 +5,12 @@ import "dotenv/config"
 const { Pool } = pg
 
 async function run() {
-  if (!process.env.DATABASE_URL) {
-    console.error("DATABASE_URL is not set")
+  if (!process.env.NEXT_PUBLIC_DATABASE_URL) {
+    console.error("NEXT_PUBLIC_DATABASE_URL is not set")
     process.exit(1)
   }
 
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+  const pool = new Pool({ connectionString: process.env.NEXT_PUBLIC_DATABASE_URL })
   
   try {
     const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@example.com"

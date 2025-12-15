@@ -4,8 +4,8 @@ DB_PORT=5432
 DB_DATABASE=saas
 DB_USERNAME=postgres
 DB_PASSWORD=1998
-DATABASE_URL="postgresql://postgres:1998@127.0.0.1:5432/saas"
-# DATABASE_URL="postgresql://postgres:rukshan2000%40@db.kfamfuftydkacjcgdzoe.supabase.co:5432/postgres?sslmode=require"
+NEXT_PUBLIC_DATABASE_URL="postgresql://postgres:1998@127.0.0.1:5432/saas"
+# NEXT_PUBLIC_DATABASE_URL="postgresql://postgres:rukshan2000%40@db.kfamfuftydkacjcgdzoe.supabase.co:5432/postgres?sslmode=require"
 
 # Database Admin Credentials (for creating tenant databases)
 DB_ADMIN_USER=postgres
