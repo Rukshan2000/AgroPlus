@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ShoppingCart, CheckCircle, LogOut, Undo2, Printer } from 'lucide-react'
+import { ShoppingCart, CheckCircle, LogOut, Undo2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useSession } from '@/hooks/use-session'
 import ProductInput from '@/components/pos/ProductInput'
@@ -11,6 +11,8 @@ import ThermalReceipt from '@/components/pos/ThermalReceipt'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
 import POSReturnModal from '@/components/pos-return-modal'
 import PaymentModal from '@/components/pos/payment-modal'
+import PrintProductsButton from '@/components/pos/print-products-button'
+import CashDrawerButton from '@/components/pos/cash-drawer-button'
 import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
 import ThemeToggle from '@/components/theme-toggle'
@@ -59,155 +61,6 @@ export default function POSSystem() {
     }
   }
 
-  const handlePrintProductList = () => {
-    try {
-      // Group products by category
-      const productsByCategory = {}
-      products.forEach(product => {
-        const category = product.category || 'Uncategorized'
-        if (!productsByCategory[category]) {
-          productsByCategory[category] = []
-        }
-        productsByCategory[category].push(product)
-      })
-
-      // Create print window
-      const printWindow = window.open('', '_blank')
-      
-      // Generate HTML for product list
-      let html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Product List - Green Plus Agro</title>
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              margin: 20px;
-              font-size: 14px;
-            }
-            h1 {
-              text-align: center;
-              color: #059669;
-              margin-bottom: 5px;
-            }
-            .subtitle {
-              text-align: center;
-              color: #666;
-              margin-bottom: 20px;
-            }
-            .category {
-              margin-top: 25px;
-              page-break-inside: avoid;
-            }
-            .category-header {
-              background: #059669;
-              color: white;
-              padding: 8px 12px;
-              font-size: 16px;
-              font-weight: bold;
-              margin-bottom: 10px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-bottom: 20px;
-            }
-            th {
-              background: #f3f4f6;
-              padding: 8px;
-              text-align: left;
-              border: 1px solid #ddd;
-              font-weight: bold;
-            }
-            td {
-              padding: 8px;
-              border: 1px solid #ddd;
-            }
-            tr:nth-child(even) {
-              background: #f9fafb;
-            }
-            .footer {
-              margin-top: 30px;
-              text-align: center;
-              color: #666;
-              font-size: 12px;
-              border-top: 1px solid #ddd;
-              padding-top: 10px;
-            }
-            @media print {
-              .no-print {
-                display: none;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <h1>Green Plus Agro - Product List</h1>
-          <div class="subtitle">Complete Product Inventory - ${new Date().toLocaleDateString()}</div>
-          <button class="no-print" onclick="window.print()" style="padding: 10px 20px; background: #059669; color: white; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px;">Print</button>
-      `
-
-      // Add each category and its products
-      Object.keys(productsByCategory).sort().forEach(category => {
-        html += `
-          <div class="category">
-            <div class="category-header">${category}</div>
-            <table>
-              <thead>
-                <tr>
-                  <th style="width: 15%;">ID</th>
-                  <th style="width: 60%;">Product Name</th>
-                  <th style="width: 25%;">Price (LKR)</th>
-                </tr>
-              </thead>
-              <tbody>
-        `
-        
-        productsByCategory[category].forEach(product => {
-          html += `
-                <tr>
-                  <td>${product.id}</td>
-                  <td>${product.name}</td>
-                  <td style="text-align: right;">${parseFloat(product.price || 0).toFixed(2)}</td>
-                </tr>
-          `
-        })
-
-        html += `
-              </tbody>
-            </table>
-          </div>
-        `
-      })
-
-      // Add footer
-      html += `
-          <div class="footer">
-            <p>Total Products: ${products.length} | Categories: ${Object.keys(productsByCategory).length}</p>
-            <p>Printing Date: ${new Date().toLocaleString()}</p>
-          </div>
-        </body>
-        </html>
-      `
-
-      printWindow.document.write(html)
-      printWindow.document.close()
-
-      toast({
-        title: "Success",
-        description: "Product list opened in new window",
-      })
-    } catch (error) {
-      console.error('Print error:', error)
-      toast({
-        title: "Error",
-        description: "Failed to generate product list",
-        variant: "destructive"
-      })
-    }
-  }
-
   // Load products on component mount
   useEffect(() => {
     loadProducts()
@@ -236,23 +89,14 @@ export default function POSSystem() {
   useEffect(() => {
     let productsToShow = products
     
-    // Filter out shopping bag from grid display (unless specifically searching for it)
-    if (!productSearch || !productSearch.toLowerCase().includes('bag')) {
-      productsToShow = productsToShow.filter(product => 
-        !product.name.toLowerCase().includes('shopping bag') &&
-        !product.name.toLowerCase().includes('carrier bag') &&
-        !product.name.toLowerCase().includes('polythene bag')
-      )
-    }
-    
     if (productSearch) {
-      productsToShow = productsToShow.filter(product => 
+      productsToShow = products.filter(product => 
         product.name.toLowerCase().includes(productSearch.toLowerCase()) ||
         product.sku?.toLowerCase().includes(productSearch.toLowerCase()) ||
         product.id.toString().includes(productSearch)
       )
     } else {
-      productsToShow = productsToShow.slice(0, 24) // Limit to 24 for performance
+      productsToShow = products.slice(0, 24) // Limit to 24 for performance
     }
     
     // Apply sorting
@@ -375,7 +219,7 @@ export default function POSSystem() {
     addProductToCart(product, null)
   }
 
-  const addProductToCart = (product, priceVariation = null, incrementByOne = false) => {
+  const addProductToCart = (product, priceVariation = null) => {
     // Check if product is already in cart (with same variation if applicable)
     const variationKey = priceVariation ? `${product.id}-${priceVariation.id}` : product.id
     const existingItemIndex = cart.findIndex(item => {
@@ -385,8 +229,7 @@ export default function POSSystem() {
       return item.id === product.id && !item.variationId
     })
     
-    // Use 1 for increment clicks, or the manual quantity for manual additions
-    const qty = incrementByOne ? 1 : (parseFloat(quantity) || 1)
+    const qty = parseInt(quantity) || 1
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
     const discountPercent = parseFloat(discount) || 0
     const discountAmount = (productPrice * discountPercent) / 100
@@ -395,7 +238,7 @@ export default function POSSystem() {
     if (existingItemIndex >= 0) {
       // Product already in cart, increase quantity
       const existingItem = cart[existingItemIndex]
-      const newQuantity = parseFloat((existingItem.quantity + qty).toFixed(2)) // Round to 2 decimal places
+      const newQuantity = existingItem.quantity + qty
       
       if (newQuantity > product.available_quantity) {
         toast({
@@ -403,7 +246,7 @@ export default function POSSystem() {
           description: `Only ${product.available_quantity} units available. Current cart has ${existingItem.quantity}.`,
           variant: "destructive"
         })
-        setQuantity(Math.max(0.01, product.available_quantity - existingItem.quantity).toString())
+        setQuantity(Math.max(1, product.available_quantity - existingItem.quantity).toString())
         return
       }
 
@@ -413,7 +256,7 @@ export default function POSSystem() {
           ? { 
               ...item, 
               quantity: newQuantity, 
-              total: parseFloat((finalPrice * newQuantity).toFixed(2)),
+              total: finalPrice * newQuantity,
               discount: discountPercent, // Update discount if changed
               unitPrice: finalPrice // Update unit price if discount changed
             }
@@ -447,7 +290,7 @@ export default function POSSystem() {
         quantity: qty,
         discount: discountPercent,
         unitPrice: finalPrice,
-        total: parseFloat((finalPrice * qty).toFixed(2)),
+        total: finalPrice * qty,
         availableStock: product.available_quantity
       }
 
@@ -461,7 +304,7 @@ export default function POSSystem() {
     }
 
     setProductId('')
-    setQuantity('1') // Reset to 1
+    setQuantity('1')
     // Don't clear discount automatically - let user keep it for multiple items
 
     // Auto-focus back to product input for next item
@@ -504,15 +347,15 @@ export default function POSSystem() {
     
     setCart(prev => prev.map((item, i) => 
       i === index 
-        ? { ...item, quantity: newQty, total: parseFloat((item.unitPrice * newQty).toFixed(2)) }
+        ? { ...item, quantity: newQty, total: item.unitPrice * newQty }
         : item
     ))
   }
 
-  const subtotal = parseFloat(cart.reduce((sum, item) => sum + item.total, 0).toFixed(2))
+  const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
   const billDiscountPercent = parseFloat(billDiscount) || 0
-  const billDiscountAmount = parseFloat(((subtotal * billDiscountPercent) / 100).toFixed(2))
-  const total = parseFloat((subtotal - billDiscountAmount).toFixed(2))
+  const billDiscountAmount = (subtotal * billDiscountPercent) / 100
+  const total = subtotal - billDiscountAmount
 
   const printBill = async () => {
     // Get printer settings from localStorage
@@ -697,7 +540,7 @@ export default function POSSystem() {
           unit_price: item.unitPrice,
           original_price: item.originalPrice,
           discount_percentage: item.discount,
-          discount_amount: parseFloat(((item.originalPrice - item.unitPrice) * item.quantity).toFixed(2)),
+          discount_amount: (item.originalPrice - item.unitPrice) * item.quantity,
           total_amount: item.total,
           buying_price: item.buying_price || 0 // Include buying price for profit calculation
         })),
@@ -884,11 +727,11 @@ export default function POSSystem() {
       switch(e.key) {
         case '+':
           e.preventDefault()
-          setQuantity(parseFloat((parseFloat(quantity) + 1).toFixed(2)).toString())
+          setQuantity((parseInt(quantity) + 1).toString())
           break
         case '-':
           e.preventDefault()
-          setQuantity(Math.max(1, parseFloat(quantity) - 1).toString())
+          setQuantity(Math.max(1, parseInt(quantity) - 1).toString())
           break
       }
     }
@@ -926,15 +769,10 @@ export default function POSSystem() {
             </Button>
 
             {/* Print Products Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrintProductList}
-              className="flex items-center gap-2"
-            >
-              <Printer className="h-4 w-4" />
-              Print Products
-            </Button>
+            <PrintProductsButton products={products} />
+
+            {/* Cash Drawer Button */}
+            <CashDrawerButton />
             
             {/* Session Timer for Cashiers */}
             {isCashier && (
@@ -1028,7 +866,7 @@ export default function POSSystem() {
               </label>
               <div className="flex">
                 <button
-                  onClick={() => setQuantity(Math.max(1, parseFloat(quantity) - 1).toString())}
+                  onClick={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
                   className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">−</span>
@@ -1037,12 +875,11 @@ export default function POSSystem() {
                   type="number"
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  step="0.01"
-                  min="0.01"
                   className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
+                  min="1"
                 />
                 <button
-                  onClick={() => setQuantity(parseFloat((parseFloat(quantity) + 1).toFixed(2)).toString())}
+                  onClick={() => setQuantity((parseInt(quantity) + 1).toString())}
                   className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">+</span>
@@ -1090,7 +927,6 @@ export default function POSSystem() {
               <button
                 onClick={addToCart}
                 className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-lg transition-colors duration-150 focus:ring-2 focus:ring-green-500 flex items-center justify-center gap-2"
-                title="Add to Cart (Enter)"
               >
                 ADD TO CART
                 <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs font-mono">↵</kbd>
@@ -1254,7 +1090,7 @@ export default function POSSystem() {
                       
                       // Check if product is already in cart
                       const existingItemIndex = cart.findIndex(item => item.id === product.id)
-                      const qty = 1 // Always increment by 1 when clicking product buttons
+                      const qty = parseInt(quantity) || 1
                       const productPrice = getProductPrice(product)
                       const discountPercent = parseFloat(discount) || 0
                       const discountAmount = (productPrice * discountPercent) / 100
@@ -1272,7 +1108,7 @@ export default function POSSystem() {
                       if (existingItemIndex >= 0) {
                         // Product already in cart, increase quantity
                         const existingItem = cart[existingItemIndex]
-                        const newQuantity = parseFloat((existingItem.quantity + qty).toFixed(2)) // Round to 2 decimal places
+                        const newQuantity = existingItem.quantity + qty
                         
                         if (newQuantity > product.available_quantity) {
                           toast({
@@ -1289,7 +1125,7 @@ export default function POSSystem() {
                             ? { 
                                 ...item, 
                                 quantity: newQuantity, 
-                                total: parseFloat((finalPrice * newQuantity).toFixed(2)),
+                                total: finalPrice * newQuantity,
                                 discount: discountPercent, // Update discount if changed
                                 unitPrice: finalPrice // Update unit price if discount changed
                               }
@@ -1320,7 +1156,7 @@ export default function POSSystem() {
                           quantity: qty,
                           discount: discountPercent,
                           unitPrice: finalPrice,
-                          total: parseFloat((finalPrice * qty).toFixed(2)),
+                          total: finalPrice * qty,
                           availableStock: product.available_quantity
                         }
 
@@ -1333,7 +1169,7 @@ export default function POSSystem() {
                         })
                       }
 
-                      setQuantity('1') // Keep at 1
+                      setQuantity('1')
                       // Don't clear discount automatically - let user keep it for multiple items
                     }}
                     className={`p-3 hover:shadow-md rounded-lg border-2 text-left transition-all duration-150 transform hover:scale-105 relative ${
@@ -1434,188 +1270,10 @@ export default function POSSystem() {
           {/* Cart & Checkout - 4 columns */}
           <div className="col-span-4">
             <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-3">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
                 <ShoppingCart className="h-5 w-5" />
                 Cart ({cart.length} items)
               </h3>
-
-              {/* Quick Add Shopping Bags */}
-              <div className="mb-3 p-2 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-200 dark:border-orange-800">
-                <div className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-2">
-                  🛍️ Quick Add Bags
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Medium Bag Button */}
-                  <button
-                    onClick={() => {
-                      const mediumBag = products.find(p => 
-                        p.name.toLowerCase().includes('shopping bag medium')
-                      )
-                      
-                      if (!mediumBag) {
-                        toast({
-                          title: "Product not found",
-                          description: "Medium shopping bag not found",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      if (mediumBag.available_quantity <= 0) {
-                        toast({
-                          title: "Out of stock",
-                          description: "Medium bags out of stock",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      const existingItemIndex = cart.findIndex(item => item.id === mediumBag.id)
-                      const bagPrice = getProductPrice(mediumBag)
-                      
-                      if (existingItemIndex >= 0) {
-                        const existingItem = cart[existingItemIndex]
-                        const newQuantity = existingItem.quantity + 1
-                        
-                        if (newQuantity > mediumBag.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${mediumBag.available_quantity} bags available`,
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        setCart(prev => prev.map((item, index) => 
-                          index === existingItemIndex 
-                            ? { 
-                                ...item, 
-                                quantity: newQuantity, 
-                                total: parseFloat((bagPrice * newQuantity).toFixed(2))
-                              }
-                            : item
-                        ))
-
-                        toast({
-                          title: "Added",
-                          description: `Medium bag ×${newQuantity}`,
-                          duration: 800
-                        })
-                      } else {
-                        const cartItem = {
-                          id: mediumBag.id,
-                          sku: mediumBag.sku,
-                          name: mediumBag.name,
-                          originalPrice: bagPrice,
-                          quantity: 1,
-                          discount: 0,
-                          unitPrice: bagPrice,
-                          total: bagPrice,
-                          availableStock: mediumBag.available_quantity
-                        }
-
-                        setCart(prev => [...prev, cartItem])
-
-                        toast({
-                          title: "Added",
-                          description: "Medium bag ×1",
-                          duration: 800
-                        })
-                      }
-                    }}
-                    className="h-10 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
-                    title="Add Medium Shopping Bag (LKR 3.00)"
-                  >
-                    <ShoppingCart className="h-3.5 w-3.5" />
-                    Medium (3.00)
-                  </button>
-
-                  {/* Large Bag Button */}
-                  <button
-                    onClick={() => {
-                      const largeBag = products.find(p => 
-                        p.name.toLowerCase().includes('shopping bag large')
-                      )
-                      
-                      if (!largeBag) {
-                        toast({
-                          title: "Product not found",
-                          description: "Large shopping bag not found",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      if (largeBag.available_quantity <= 0) {
-                        toast({
-                          title: "Out of stock",
-                          description: "Large bags out of stock",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      const existingItemIndex = cart.findIndex(item => item.id === largeBag.id)
-                      const bagPrice = getProductPrice(largeBag)
-                      
-                      if (existingItemIndex >= 0) {
-                        const existingItem = cart[existingItemIndex]
-                        const newQuantity = existingItem.quantity + 1
-                        
-                        if (newQuantity > largeBag.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${largeBag.available_quantity} bags available`,
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        setCart(prev => prev.map((item, index) => 
-                          index === existingItemIndex 
-                            ? { 
-                                ...item, 
-                                quantity: newQuantity, 
-                                total: parseFloat((bagPrice * newQuantity).toFixed(2))
-                              }
-                            : item
-                        ))
-
-                        toast({
-                          title: "Added",
-                          description: `Large bag ×${newQuantity}`,
-                          duration: 800
-                        })
-                      } else {
-                        const cartItem = {
-                          id: largeBag.id,
-                          sku: largeBag.sku,
-                          name: largeBag.name,
-                          originalPrice: bagPrice,
-                          quantity: 1,
-                          discount: 0,
-                          unitPrice: bagPrice,
-                          total: bagPrice,
-                          availableStock: largeBag.available_quantity
-                        }
-
-                        setCart(prev => [...prev, cartItem])
-
-                        toast({
-                          title: "Added",
-                          description: "Large bag ×1",
-                          duration: 800
-                        })
-                      }
-                    }}
-                    className="h-10 bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
-                    title="Add Large Shopping Bag (LKR 5.00)"
-                  >
-                    <ShoppingCart className="h-3.5 w-3.5" />
-                    Large (5.00)
-                  </button>
-                </div>
-              </div>
 
               {/* Cart Items */}
               <div className="max-h-64 overflow-y-auto mb-4">
@@ -1646,7 +1304,7 @@ export default function POSSystem() {
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-1">
                             <button
-                              onClick={() => updateQuantity(index, parseFloat((item.quantity - 1).toFixed(2)))}
+                              onClick={() => updateQuantity(index, item.quantity - 1)}
                               className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
                             >
                               −
@@ -1654,14 +1312,13 @@ export default function POSSystem() {
                             <input
                               type="number"
                               value={item.quantity}
-                              onChange={(e) => updateQuantity(index, parseFloat(e.target.value) || 0.01)}
-                              step="0.01"
-                              min="0.01"
+                              onChange={(e) => updateQuantity(index, parseInt(e.target.value) || 1)}
                               className="w-12 h-7 text-center text-sm font-mono bg-white dark:bg-black border border-gray-300 dark:border-gray-600 rounded"
+                              min="1"
                               max={item.availableStock}
                             />
                             <button
-                              onClick={() => updateQuantity(index, parseFloat((item.quantity + 1).toFixed(2)))}
+                              onClick={() => updateQuantity(index, item.quantity + 1)}
                               className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
                             >
                               +

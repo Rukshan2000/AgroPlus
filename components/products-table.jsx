@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Pencil, Trash2, Plus, Search, QrCode, Package, Upload, Download, Trash, ChevronLeft, ChevronRight } from "lucide-react"
+import { Pencil, Trash2, Plus, Search, QrCode, Package, Upload, Download, Trash } from "lucide-react"
 import AddProductModal from "./add-product-modal"
 import DeleteProductModal from "./delete-product-modal"
 import RestockProductModal from "./restock-product-modal"
@@ -30,12 +30,6 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const [selectedProducts, setSelectedProducts] = useState(new Set())
   const [selectAll, setSelectAll] = useState(false)
   
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage, setItemsPerPage] = useState(10)
-  const [totalItems, setTotalItems] = useState(0)
-  const [totalPages, setTotalPages] = useState(0)
-  
   // Modal states
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -45,64 +39,28 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const [bulkBarcodeModalOpen, setBulkBarcodeModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
 
-  // Fetch products from server with pagination
-  const fetchProducts = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: itemsPerPage.toString(),
-      })
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = !search || 
+      product.name.toLowerCase().includes(search.toLowerCase()) ||
+      product.description?.toLowerCase().includes(search.toLowerCase()) ||
+      product.sku?.toLowerCase().includes(search.toLowerCase())
+    
+    const matchesCategory = categoryFilter === "all" || product.category === categoryFilter
+    const matchesStatus = statusFilter === "all" || 
+      (statusFilter === "active" && product.is_active) ||
+      (statusFilter === "inactive" && !product.is_active)
 
-      if (search) params.append('search', search)
-      if (categoryFilter !== 'all') params.append('category', categoryFilter)
-      if (statusFilter !== 'all') {
-        params.append('is_active', statusFilter === 'active' ? 'true' : 'false')
-      }
+    return matchesSearch && matchesCategory && matchesStatus
+  })
 
-      const response = await fetch(`/api/products?${params.toString()}`)
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch products')
-      }
-
-      const data = await response.json()
-      
-      setProducts(data.products || [])
-      setTotalItems(data.total || 0)
-      setTotalPages(data.totalPages || 0)
-    } catch (error) {
-      console.error('Error fetching products:', error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch products from server",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Fetch products when filters or pagination changes
-  useEffect(() => {
-    fetchProducts()
-  }, [currentPage, itemsPerPage, search, categoryFilter, statusFilter])
-
-  // Reset to first page when filters change
-  useEffect(() => {
-    if (currentPage !== 1) {
-      setCurrentPage(1)
-    }
-  }, [search, categoryFilter, statusFilter, itemsPerPage])
-
-  // Handle select all for current page
+  // Handle select all
   const handleSelectAll = () => {
     if (selectAll) {
       setSelectedProducts(new Set())
       setSelectAll(false)
     } else {
-      const currentPageIds = new Set(products.map(p => p.id))
-      setSelectedProducts(currentPageIds)
+      const allIds = new Set(filteredProducts.map(p => p.id))
+      setSelectedProducts(allIds)
       setSelectAll(true)
     }
   }
@@ -116,46 +74,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       newSelected.add(productId)
     }
     setSelectedProducts(newSelected)
-    setSelectAll(newSelected.size === products.length)
-  }
-
-  // Pagination handlers
-  const handlePageChange = (page) => {
-    setCurrentPage(page)
-    setSelectedProducts(new Set()) // Clear selection on page change
-    setSelectAll(false)
-  }
-
-  const handleItemsPerPageChange = (value) => {
-    setItemsPerPage(Number(value))
-    setCurrentPage(1)
-    setSelectedProducts(new Set()) // Clear selection
-    setSelectAll(false)
-  }
-
-  // Calculate display indices
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = Math.min(startIndex + itemsPerPage, totalItems)
-
-  // Generate page numbers for pagination
-  const getPageNumbers = () => {
-    const pages = []
-    const maxVisiblePages = 5
-    
-    if (totalPages <= maxVisiblePages) {
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i)
-      }
-    } else {
-      const startPage = Math.max(1, currentPage - 2)
-      const endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
-      
-      for (let i = startPage; i <= endPage; i++) {
-        pages.push(i)
-      }
-    }
-    
-    return pages
+    setSelectAll(newSelected.size === filteredProducts.length)
   }
 
   // Bulk delete handler
@@ -198,9 +117,6 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       setProducts(prev => prev.filter(p => !selectedProducts.has(p.id)))
       setSelectedProducts(new Set())
       setSelectAll(false)
-      
-      // Refresh to get updated data
-      fetchProducts()
 
       toast({
         title: "Success",
@@ -243,8 +159,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       })
 
       if (res.ok) {
-        // Refresh products from server
-        fetchProducts()
+        setProducts(products.filter(p => p.id !== productId))
       } else {
         const err = await res.json().catch(() => ({}))
         alert(err.error || "Failed to delete product")
@@ -380,7 +295,9 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
               }
 
               // Refresh products list
-              fetchProducts()
+              const productsResponse = await fetch("/api/products?limit=100")
+              const productsData = await productsResponse.json()
+              setProducts(productsData.products)
             }
           } catch (error) {
             console.error("Import error:", error)
@@ -542,22 +459,18 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
 
   const handleProductSuccess = (product, action) => {
     if (action === 'created') {
-      // Refresh from server to get accurate data
-      fetchProducts()
+      setProducts(prev => [product, ...prev])
     } else if (action === 'updated') {
-      // Refresh from server to get accurate data
-      fetchProducts()
+      setProducts(prev => prev.map(p => p.id === product.id ? product : p))
     }
   }
 
   const handleRestockSuccess = (product) => {
-    // Refresh from server to get updated stock
-    fetchProducts()
+    setProducts(prev => prev.map(p => p.id === product.id ? product : p))
   }
 
   const handleDeleteSuccess = (productId) => {
-    // Refresh from server
-    fetchProducts()
+    setProducts(prev => prev.filter(p => p.id !== productId))
   }
 
   const formatPrice = (price) => {
@@ -659,17 +572,6 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Items per page" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10 per page</SelectItem>
-              <SelectItem value="25">25 per page</SelectItem>
-              <SelectItem value="50">50 per page</SelectItem>
-              <SelectItem value="100">100 per page</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
 
         {/* Products Table */}
@@ -692,16 +594,12 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             <div>Actions</div>
             <div></div>
           </div>
-          {loading ? (
-            <div className="py-8 text-center text-muted-foreground">
-              Loading products...
-            </div>
-          ) : products.length === 0 ? (
+          {filteredProducts.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               No products found
             </div>
           ) : (
-            products.map((product) => (
+            filteredProducts.map((product) => (
               <div key={product.id} className="grid grid-cols-10 items-center py-3 border-b last:border-b-0">
                 <div className="flex items-center">
                   <Checkbox
@@ -781,45 +679,6 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             ))
           )}
         </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-6">
-            <div className="text-sm text-muted-foreground">
-              Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} products
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage - 1)}
-                disabled={currentPage === 1}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              
-              {getPageNumbers().map((page) => (
-                <Button
-                  key={page}
-                  variant={currentPage === page ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handlePageChange(page)}
-                >
-                  {page}
-                </Button>
-              ))}
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handlePageChange(currentPage + 1)}
-                disabled={currentPage === totalPages}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        )}
       </CardContent>
 
       {/* Add Product Modal */}
@@ -866,7 +725,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
       <BulkBarcodeSticker
         isOpen={bulkBarcodeModalOpen}
         onClose={() => setBulkBarcodeModalOpen(false)}
-        products={products}
+        products={filteredProducts}
       />
     </Card>
   )
