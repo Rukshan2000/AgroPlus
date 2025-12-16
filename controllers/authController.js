@@ -60,41 +60,57 @@ export async function register(request) {
 }
 
 export async function login(request) {
-  const body = await request.json().catch(() => ({}))
-  const parsed = loginSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid input" }, { status: 400 })
-  }
-  const { email, password } = parsed.data
-  const user = await findUserByEmail(email)
-  if (!user) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
-  }
-  const ok = await comparePassword(password, user.password_hash)
-  if (!ok) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
-  }
-  await createSession(user.id)
-  await getOrCreateCsrfToken()
-  
-  // Create work session for cashier users
-  if (user.role === 'cashier') {
-    try {
-      // End any existing active session first (in case of unexpected logout)
-      const existingSession = await getCurrentWorkSession(user.id)
-      if (existingSession) {
-        await endWorkSession(user.id, 'Auto-ended on new login')
-      }
-      
-      // Create new work session
-      await createWorkSession(user.id)
-    } catch (error) {
-      console.error('Error creating work session:', error)
-      // Don't fail login if work session creation fails
+  try {
+    const body = await request.json().catch(() => ({}))
+    const parsed = loginSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 })
     }
+    const { email, password } = parsed.data
+    
+    // Add timeout wrapper for database query
+    const userPromise = findUserByEmail(email)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Database query timeout")), 25000)
+    )
+    
+    const user = await Promise.race([userPromise, timeoutPromise])
+    
+    if (!user) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+    const ok = await comparePassword(password, user.password_hash)
+    if (!ok) {
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 })
+    }
+    await createSession(user.id)
+    await getOrCreateCsrfToken()
+    
+    // Create work session for cashier users
+    if (user.role === 'cashier') {
+      try {
+        // End any existing active session first (in case of unexpected logout)
+        const existingSession = await getCurrentWorkSession(user.id)
+        if (existingSession) {
+          await endWorkSession(user.id, 'Auto-ended on new login')
+        }
+        
+        // Create new work session
+        await createWorkSession(user.id)
+      } catch (error) {
+        console.error('Error creating work session:', error)
+        // Don't fail login if work session creation fails
+      }
+    }
+    
+    return NextResponse.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+  } catch (error) {
+    console.error('Login error:', error)
+    return NextResponse.json(
+      { error: "Internal server error", details: error.message },
+      { status: 500 }
+    )
   }
-  
-  return NextResponse.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } })
 }
 
 export async function logout(request) {

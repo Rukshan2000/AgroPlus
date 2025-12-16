@@ -1,0 +1,24 @@
+{
+  "functions": {
+    "app/api/auth/**/*.js": {
+      "maxDuration": 60
+    },
+    "app/api/sales/**/*.js": {
+      "maxDuration": 60
+    },
+    "app/api/**/*.js": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "X-Accel-Buffering",
+          "value": "no"
+        }
+      ]
+    }
+  ]
+}
