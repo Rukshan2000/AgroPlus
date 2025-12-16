@@ -152,7 +152,7 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
         body: JSON.stringify({
           sale_id: selectedSale.id,
           product_id: selectedSale.product_id,
-          quantity_returned: parseInt(formData.quantity_returned),
+          quantity_returned: parseFloat(formData.quantity_returned),
           return_reason: formData.return_reason,
           restocked: formData.restocked,
         }),
@@ -191,11 +191,13 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
   const filteredSales = saleSearch
     ? recentSales.filter(
         (sale) =>
-          sale.id.toString().includes(saleSearch) ||
-          sale.product_name?.toLowerCase().includes(saleSearch.toLowerCase()) ||
-          sale.sku?.toLowerCase().includes(saleSearch.toLowerCase())
+          sale.return !== false && (
+            sale.id.toString().includes(saleSearch) ||
+            sale.product_name?.toLowerCase().includes(saleSearch.toLowerCase()) ||
+            sale.sku?.toLowerCase().includes(saleSearch.toLowerCase())
+          )
       )
-    : recentSales.slice(0, 10);
+    : recentSales.filter(sale => sale.return !== false).slice(0, 10);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -266,6 +268,8 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
                             <Badge variant="destructive">Fully Returned</Badge>
                           ) : sale.return_status === "partial" ? (
                             <Badge variant="secondary">Partially Returned</Badge>
+                          ) : sale.return === false ? (
+                            <Badge variant="destructive">Not Returnable</Badge>
                           ) : (
                             <Badge variant="outline">Available</Badge>
                           )}
@@ -275,7 +279,8 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
                             size="sm"
                             variant="outline"
                             onClick={() => handleSelectSale(sale)}
-                            disabled={sale.return_status === "full"}
+                            disabled={sale.return_status === "full" || sale.return === false}
+                            title={sale.return === false ? "This product is not available for return" : ""}
                           >
                             Select
                           </Button>

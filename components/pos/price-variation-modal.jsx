@@ -99,8 +99,8 @@ export default function PriceVariationModal({
                   className={`
                     relative border-2 rounded-lg p-4 cursor-pointer transition-all
                     ${selectedVariation?.id === variation.id 
-                      ? 'border-primary bg-primary/5' 
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}
+                      ? 'border-primary bg-primary/5 dark:bg-primary/10' 
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-900/50'}
                   `}
                 >
                   <div className="flex items-start justify-between">

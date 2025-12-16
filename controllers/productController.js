@@ -36,7 +36,8 @@ const productSchema = z.object({
   expiry_date: z.string().optional().or(z.literal("")).nullable(),
   manufacture_date: z.string().optional().or(z.literal("")).nullable(),
   alert_before_days: z.number().int().min(1, "Alert days must be positive").default(7),
-  minimum_quantity: z.number().int().min(0, "Minimum quantity must be non-negative").default(5)
+  minimum_quantity: z.number().int().min(0, "Minimum quantity must be non-negative").default(5),
+  return: z.boolean().default(true)
 })
 
 const updateProductSchema = productSchema.partial()

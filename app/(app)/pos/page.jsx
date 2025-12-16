@@ -16,8 +16,7 @@ import CashDrawerButton from '@/components/pos/cash-drawer-button'
 import { Button } from '@/components/ui/button'
 import { ConnectionStatusBadge } from '@/components/connection-status'
 import ThemeToggle from '@/components/theme-toggle'
-import offlineProductModel from '@/models/offlineProductModel'
-import offlineSalesModel from '@/models/offlineSalesModel'
+import ScreenSizeChanger from '@/components/pos/screen-size-changer'
 
 export default function POSSystem() {
   const [cart, setCart] = useState([])
@@ -106,20 +105,12 @@ export default function POSSystem() {
 
   const loadProducts = async () => {
     try {
-      // Try offline first, then fallback to API if online
-      const offlineResult = await offlineProductModel.findAll({ limit: 100 });
-      
-      if (offlineResult.success && offlineResult.products.length > 0) {
-        // Filter active products
-        const activeProducts = offlineResult.products.filter(p => p.is_active !== false);
-        setProducts(activeProducts);
+      const response = await fetch('/api/products?limit=100&is_active=true');
+      if (response.ok) {
+        const data = await response.json();
+        setProducts(data.products || []);
       } else {
-        // Fallback to API if no offline data
-        const response = await fetch('/api/products?limit=100&is_active=true');
-        if (response.ok) {
-          const data = await response.json();
-          setProducts(data.products || []);
-        }
+        throw new Error('Failed to fetch products');
       }
     } catch (error) {
       toast({
@@ -555,55 +546,28 @@ export default function POSSystem() {
         cashier_name: session?.user?.name
       }
 
-      // Try offline storage first
-      const offlineResult = await offlineSalesModel.createSale(saleData);
-      
-      if (offlineResult.success) {
-        // Update local product stock
-        const stockUpdates = cart.map(item => ({
-          productId: item.id,
-          quantity: item.quantity,
-          operation: 'subtract'
-        }));
-        
-        await offlineProductModel.bulkUpdateStock(stockUpdates);
-        
-        // Set sale ID from offline result
-        const offlineSaleId = offlineResult.sale && offlineResult.sale._id ? offlineResult.sale._id : `OFF-${Date.now()}`
-        setSaleId(offlineSaleId)
+      const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(saleData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Set sale ID from API response - use first sale ID or generate one
+        const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
+        setSaleId(firstSaleId || `SALE-${Date.now()}`)
         setShowBill(true);
         toast({
           title: "Sale completed",
-          description: "Transaction saved locally and will sync when online"
+          description: "Transaction processed successfully"
         });
-        
-        // Reload products to show updated stock
         loadProducts();
       } else {
-        // Fallback to API if offline storage fails
-        const response = await fetch('/api/sales', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(saleData)
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          // Set sale ID from API response - use first sale ID or generate one
-          const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
-          setSaleId(firstSaleId || `SALE-${Date.now()}`)
-          setShowBill(true);
-          toast({
-            title: "Sale completed",
-            description: "Transaction processed successfully"
-          });
-          loadProducts();
-        } else {
-          const error = await response.json();
-          throw new Error(error.message || 'Failed to process sale');
-        }
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to process sale');
       }
     } catch (error) {
       toast({
@@ -663,6 +627,43 @@ export default function POSSystem() {
       if (e.ctrlKey && e.key === 'l' && isCashier) {
         e.preventDefault()
         handleLogout()
+        return
+      }
+
+      // Ctrl++ - Zoom In
+      if (e.ctrlKey && (e.key === '+' || e.key === '=')) {
+        e.preventDefault()
+        const currentZoom = parseInt(localStorage.getItem('pos-zoom') || '100')
+        const newZoom = Math.min(currentZoom + 10, 200)
+        document.documentElement.style.fontSize = `${(newZoom / 100) * 16}px`
+        document.body.style.transform = `scale(${newZoom / 100})`
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = `${100 / (newZoom / 100)}%`
+        localStorage.setItem('pos-zoom', newZoom)
+        return
+      }
+
+      // Ctrl+- - Zoom Out
+      if (e.ctrlKey && e.key === '-') {
+        e.preventDefault()
+        const currentZoom = parseInt(localStorage.getItem('pos-zoom') || '100')
+        const newZoom = Math.max(currentZoom - 10, 80)
+        document.documentElement.style.fontSize = `${(newZoom / 100) * 16}px`
+        document.body.style.transform = `scale(${newZoom / 100})`
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = `${100 / (newZoom / 100)}%`
+        localStorage.setItem('pos-zoom', newZoom)
+        return
+      }
+
+      // Ctrl+0 - Reset Zoom
+      if (e.ctrlKey && e.key === '0') {
+        e.preventDefault()
+        document.documentElement.style.fontSize = '16px'
+        document.body.style.transform = 'scale(1)'
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = '100%'
+        localStorage.setItem('pos-zoom', '100')
         return
       }
       
@@ -769,10 +770,25 @@ export default function POSSystem() {
             </Button>
 
             {/* Print Products Button */}
+<<<<<<< HEAD
             <PrintProductsButton products={products} />
 
             {/* Cash Drawer Button */}
             <CashDrawerButton />
+=======
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePrintProductList}
+              className="flex items-center gap-2"
+            >
+              <Printer className="h-4 w-4" />
+              Print Products
+            </Button>
+
+            {/* Screen Size Changer */}
+            <ScreenSizeChanger />
+>>>>>>> fix/errors
             
             {/* Session Timer for Cashiers */}
             {isCashier && (
@@ -790,12 +806,14 @@ export default function POSSystem() {
               </div>
             )}
             {/* Keyboard Shortcuts Help */}
-            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-3 hidden lg:flex">
+            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-2 hidden xl:flex flex-wrap gap-2">
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+Q</kbd> Product</span>
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+↵</kbd> Sale</span>
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+K</kbd> Clear</span>
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+/</kbd> Search</span>
               <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">←→↑↓</kbd> Navigate</span>
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl++</kbd> Zoom In</span>
+              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+−</kbd> Zoom Out</span>
               {isCashier && <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+L</kbd> Logout</span>}
             </div>
             
@@ -1055,19 +1073,19 @@ export default function POSSystem() {
                       onClick={() => {setSortBy('popularity'); setSortOrder('desc')}}
                       className={`px-2 py-1 text-xs rounded ${sortBy === 'popularity' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
-                      🔥 Hot
+                      Hot
                     </button>
                     <button
                       onClick={() => {setSortBy('price'); setSortOrder('asc')}}
                       className={`px-2 py-1 text-xs rounded ${sortBy === 'price' && sortOrder === 'asc' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
-                      💰 Cheap
+                      Cheap
                     </button>
                     <button
                       onClick={() => {setSortBy('name'); setSortOrder('asc')}}
                       className={`px-2 py-1 text-xs rounded ${sortBy === 'name' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                     >
-                      🔤 A-Z
+                      A-Z
                     </button>
                   </div>
                 </div>
@@ -1084,10 +1102,11 @@ export default function POSSystem() {
                   <button
                     key={product.id}
                     data-product-index={index}
-                    onClick={() => {
+                    onClick={async () => {
                       // Update selected index on click
                       setSelectedProductIndex(index)
                       
+<<<<<<< HEAD
                       // Check if product is already in cart
                       const existingItemIndex = cart.findIndex(item => item.id === product.id)
                       const qty = parseInt(quantity) || 1
@@ -1096,6 +1115,8 @@ export default function POSSystem() {
                       const discountAmount = (productPrice * discountPercent) / 100
                       const finalPrice = productPrice - discountAmount
 
+=======
+>>>>>>> fix/errors
                       if (product.available_quantity <= 0) {
                         toast({
                           title: "Out of stock",
@@ -1105,72 +1126,26 @@ export default function POSSystem() {
                         return
                       }
 
-                      if (existingItemIndex >= 0) {
-                        // Product already in cart, increase quantity
-                        const existingItem = cart[existingItemIndex]
-                        const newQuantity = existingItem.quantity + qty
-                        
-                        if (newQuantity > product.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${product.available_quantity} units available. Current cart has ${existingItem.quantity}.`,
-                            variant: "destructive"
-                          })
-                          return
+                      // Check if product has price variations
+                      try {
+                        const res = await fetch(`/api/products/${product.id}/price-variations/active`)
+                        if (res.ok) {
+                          const data = await res.json()
+                          const variations = data.variations || []
+                          
+                          if (variations.length > 0) {
+                            // Show price variation modal
+                            setSelectedProductForVariation(product)
+                            setShowPriceVariationModal(true)
+                            return
+                          }
                         }
-
-                        // Update existing item quantity
-                        setCart(prev => prev.map((item, index) => 
-                          index === existingItemIndex 
-                            ? { 
-                                ...item, 
-                                quantity: newQuantity, 
-                                total: finalPrice * newQuantity,
-                                discount: discountPercent, // Update discount if changed
-                                unitPrice: finalPrice // Update unit price if discount changed
-                              }
-                            : item
-                        ))
-
-                        toast({
-                          title: "Quantity updated",
-                          description: `${product.name} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
-                          duration: 1000
-                        })
-                      } else {
-                        // Product not in cart, add new item
-                        if (qty > product.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${product.available_quantity} units available`,
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        const cartItem = {
-                          id: product.id,
-                          sku: product.sku,
-                          name: product.name,
-                          originalPrice: productPrice,
-                          quantity: qty,
-                          discount: discountPercent,
-                          unitPrice: finalPrice,
-                          total: finalPrice * qty,
-                          availableStock: product.available_quantity
-                        }
-
-                        setCart(prev => [...prev, cartItem])
-
-                        toast({
-                          title: "Added to cart",
-                          description: `${product.name} × ${qty}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
-                          duration: 1000
-                        })
+                      } catch (error) {
+                        console.error('Error checking price variations:', error)
                       }
 
-                      setQuantity('1')
-                      // Don't clear discount automatically - let user keep it for multiple items
+                      // No price variations, proceed with normal flow
+                      addProductToCart(product, null, true)
                     }}
                     className={`p-3 hover:shadow-md rounded-lg border-2 text-left transition-all duration-150 transform hover:scale-105 relative ${
                       // Keyboard navigation highlight
@@ -1275,6 +1250,187 @@ export default function POSSystem() {
                 Cart ({cart.length} items)
               </h3>
 
+<<<<<<< HEAD
+=======
+              {/* Quick Add Shopping Bags */}
+              <div className="mb-3 p-2 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-200 dark:border-orange-800">
+                <div className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-2">
+                  Quick Add Bags
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Medium Bag Button */}
+                  <button
+                    onClick={() => {
+                      const mediumBag = products.find(p => 
+                        p.name.toLowerCase().includes('shopping bag medium')
+                      )
+                      
+                      if (!mediumBag) {
+                        toast({
+                          title: "Product not found",
+                          description: "Medium shopping bag not found",
+                          variant: "destructive"
+                        })
+                        return
+                      }
+
+                      if (mediumBag.available_quantity <= 0) {
+                        toast({
+                          title: "Out of stock",
+                          description: "Medium bags out of stock",
+                          variant: "destructive"
+                        })
+                        return
+                      }
+
+                      const existingItemIndex = cart.findIndex(item => item.id === mediumBag.id)
+                      const bagPrice = getProductPrice(mediumBag)
+                      
+                      if (existingItemIndex >= 0) {
+                        const existingItem = cart[existingItemIndex]
+                        const newQuantity = existingItem.quantity + 1
+                        
+                        if (newQuantity > mediumBag.available_quantity) {
+                          toast({
+                            title: "Insufficient stock",
+                            description: `Only ${mediumBag.available_quantity} bags available`,
+                            variant: "destructive"
+                          })
+                          return
+                        }
+
+                        setCart(prev => prev.map((item, index) => 
+                          index === existingItemIndex 
+                            ? { 
+                                ...item, 
+                                quantity: newQuantity, 
+                                total: parseFloat((bagPrice * newQuantity).toFixed(2))
+                              }
+                            : item
+                        ))
+
+                        toast({
+                          title: "Added",
+                          description: `Medium bag ×${newQuantity}`,
+                          duration: 800
+                        })
+                      } else {
+                        const cartItem = {
+                          id: mediumBag.id,
+                          sku: mediumBag.sku,
+                          name: mediumBag.name,
+                          originalPrice: bagPrice,
+                          quantity: 1,
+                          discount: 0,
+                          unitPrice: bagPrice,
+                          total: bagPrice,
+                          availableStock: mediumBag.available_quantity
+                        }
+
+                        setCart(prev => [...prev, cartItem])
+
+                        toast({
+                          title: "Added",
+                          description: "Medium bag ×1",
+                          duration: 800
+                        })
+                      }
+                    }}
+                    className="h-10 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
+                    title="Add Medium Shopping Bag (LKR 3.00)"
+                  >
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                    Medium (3.00)
+                  </button>
+
+                  {/* Large Bag Button */}
+                  <button
+                    onClick={() => {
+                      const largeBag = products.find(p => 
+                        p.name.toLowerCase().includes('shopping bag large')
+                      )
+                      
+                      if (!largeBag) {
+                        toast({
+                          title: "Product not found",
+                          description: "Large shopping bag not found",
+                          variant: "destructive"
+                        })
+                        return
+                      }
+
+                      if (largeBag.available_quantity <= 0) {
+                        toast({
+                          title: "Out of stock",
+                          description: "Large bags out of stock",
+                          variant: "destructive"
+                        })
+                        return
+                      }
+
+                      const existingItemIndex = cart.findIndex(item => item.id === largeBag.id)
+                      const bagPrice = getProductPrice(largeBag)
+                      
+                      if (existingItemIndex >= 0) {
+                        const existingItem = cart[existingItemIndex]
+                        const newQuantity = existingItem.quantity + 1
+                        
+                        if (newQuantity > largeBag.available_quantity) {
+                          toast({
+                            title: "Insufficient stock",
+                            description: `Only ${largeBag.available_quantity} bags available`,
+                            variant: "destructive"
+                          })
+                          return
+                        }
+
+                        setCart(prev => prev.map((item, index) => 
+                          index === existingItemIndex 
+                            ? { 
+                                ...item, 
+                                quantity: newQuantity, 
+                                total: parseFloat((bagPrice * newQuantity).toFixed(2))
+                              }
+                            : item
+                        ))
+
+                        toast({
+                          title: "Added",
+                          description: `Large bag ×${newQuantity}`,
+                          duration: 800
+                        })
+                      } else {
+                        const cartItem = {
+                          id: largeBag.id,
+                          sku: largeBag.sku,
+                          name: largeBag.name,
+                          originalPrice: bagPrice,
+                          quantity: 1,
+                          discount: 0,
+                          unitPrice: bagPrice,
+                          total: bagPrice,
+                          availableStock: largeBag.available_quantity
+                        }
+
+                        setCart(prev => [...prev, cartItem])
+
+                        toast({
+                          title: "Added",
+                          description: "Large bag ×1",
+                          duration: 800
+                        })
+                      }
+                    }}
+                    className="h-10 bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
+                    title="Add Large Shopping Bag (LKR 5.00)"
+                  >
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                    Large (5.00)
+                  </button>
+                </div>
+              </div>
+
+>>>>>>> fix/errors
               {/* Cart Items */}
               <div className="max-h-64 overflow-y-auto mb-4">
                 {cart.length === 0 ? (

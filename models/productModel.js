@@ -1,6 +1,116 @@
 import { query } from "../lib/db"
 import { bulkCreatePriceVariations } from "./priceVariationModel"
 
+// ============================================================================
+// CONSTANTS & UTILITIES
+// ============================================================================
+
+export const UNIT_TYPES = [
+  // Weight
+  { value: 'kg', label: 'Kilograms (kg)' },
+  { value: 'g', label: 'Grams (g)' },
+  { value: 'mg', label: 'Milligrams (mg)' },
+  { value: 'ton', label: 'Tons (ton)' },
+  { value: 'lb', label: 'Pounds (lb)' },
+  { value: 'oz', label: 'Ounces (oz)' },
+  
+  // Volume
+  { value: 'l', label: 'Liters (l)' },
+  { value: 'ml', label: 'Milliliters (ml)' },
+  { value: 'gal', label: 'Gallons (gal)' },
+  { value: 'pt', label: 'Pints (pt)' },
+  { value: 'qt', label: 'Quarts (qt)' },
+  
+  // Length / Area / Dimension
+  { value: 'm', label: 'Meters (m)' },
+  { value: 'cm', label: 'Centimeters (cm)' },
+  { value: 'mm', label: 'Millimeters (mm)' },
+  { value: 'ft', label: 'Feet (ft)' },
+  { value: 'in', label: 'Inches (in)' },
+  { value: 'sqft', label: 'Square Feet (sqft)' },
+  { value: 'sqm', label: 'Square Meters (sqm)' },
+  
+  // Count / Quantity
+  { value: 'items', label: 'Items' },
+  { value: 'pcs', label: 'Pieces' },
+  { value: 'units', label: 'Units' },
+  { value: 'packs', label: 'Packs' },
+  { value: 'boxes', label: 'Boxes' },
+  { value: 'bottles', label: 'Bottles' },
+  { value: 'bags', label: 'Bags' },
+  { value: 'sachets', label: 'Sachets' },
+  { value: 'cartons', label: 'Cartons' },
+  { value: 'dozen', label: 'Dozen' },
+  { value: 'pair', label: 'Pair' },
+  { value: 'rolls', label: 'Rolls' },
+  { value: 'barrels', label: 'Barrels' },
+  { value: 'drums', label: 'Drums' },
+  { value: 'packets', label: 'Packets' },
+  { value: 'trays', label: 'Trays' },
+  { value: 'containers', label: 'Containers' },
+  { value: 'sheets', label: 'Sheets' },
+  { value: 'tubes', label: 'Tubes' },
+  { value: 'bundles', label: 'Bundles' },
+  
+  // Agricultural / Misc
+  { value: 'bunch', label: 'Bunch' },
+  { value: 'litre', label: 'Litre (litre)' },
+  { value: 'acre', label: 'Acre' },
+  { value: 'hectare', label: 'Hectare' },
+  { value: 'plant', label: 'Plant' },
+  { value: 'seed', label: 'Seed' },
+  { value: 'sack', label: 'Sack' },
+  { value: 'crate', label: 'Crate' },
+]
+
+// ============================================================================
+// PRIVATE HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Builds WHERE clause for filtered queries
+ * @param {Object} filters - Filter criteria
+ * @param {Array} params - Parameters array (passed by reference)
+ * @returns {Object} SQL clause and updated params
+ */
+function buildWhereClause(filters = {}, params = []) {
+  const conditions = []
+  let paramIndex = params.length + 1
+  
+  if (filters.category) {
+    conditions.push(`category = $${paramIndex}`)
+    params.push(filters.category)
+    paramIndex++
+  }
+  
+  if (filters.search) {
+    conditions.push(`(name ILIKE $${paramIndex} OR description ILIKE $${paramIndex} OR sku ILIKE $${paramIndex})`)
+    params.push(`%${filters.search}%`)
+    paramIndex++
+  }
+  
+  if (filters.is_active !== undefined) {
+    conditions.push(`is_active = $${paramIndex}`)
+    params.push(filters.is_active)
+    paramIndex++
+  }
+  
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  
+  return { whereClause, params }
+}
+
+/**
+ * Determines selling price with backward compatibility
+ */
+function determineSellingPrice(price, sellingPrice) {
+  return sellingPrice || price || 0.00
+}
+
+// ============================================================================
+// PRODUCT CRUD OPERATIONS
+// ============================================================================
+
 export async function findProductById(id) {
   const result = await query(
     'SELECT * FROM products WHERE id = $1 LIMIT 1',
@@ -10,120 +120,122 @@ export async function findProductById(id) {
 }
 
 export async function findProductBySku(sku) {
-  const result = await query('SELECT * FROM products WHERE sku = $1 LIMIT 1', [sku])
+  const result = await query(
+    'SELECT * FROM products WHERE sku = $1 LIMIT 1', 
+    [sku]
+  )
   return result.rows[0] || null
 }
 
-export async function createProduct({ 
-  name, 
-  description, 
-  price, 
-  buying_price = 0.00,
-  selling_price,
-  sku, 
-  category, 
-  stock_quantity = 0, 
-  is_active = true, 
-  image_url, 
-  created_by,
-  unit_type = 'kg',
-  unit_value = 1.000,
-  expiry_date = null,
-  manufacture_date = null,
-  alert_before_days = 7,
-  minimum_quantity = 5
-}) {
-  // Use selling_price if provided, otherwise fall back to price for backward compatibility
-  const finalSellingPrice = selling_price || price || 0.00;
+export async function createProduct(productData) {
+  const {
+    name,
+    description,
+    price,
+    buying_price = 0.00,
+    selling_price,
+    sku,
+    category,
+    stock_quantity = 0,
+    is_active = true,
+    image_url,
+    created_by,
+    unit_type = 'kg',
+    unit_value = 1.000,
+    expiry_date = null,
+    manufacture_date = null,
+    alert_before_days = 7,
+    minimum_quantity = 5,
+    return: allowReturn = true
+  } = productData
+  
+  const finalSellingPrice = determineSellingPrice(price, selling_price)
   
   const result = await query(`
     INSERT INTO products (
       name, description, price, buying_price, selling_price, sku, category, 
-      stock_quantity, available_quantity, is_active, image_url, created_by, unit_type, unit_value,
-      expiry_date, manufacture_date, alert_before_days, minimum_quantity
+      stock_quantity, available_quantity, is_active, image_url, created_by, 
+      unit_type, unit_value, expiry_date, manufacture_date, alert_before_days, 
+      minimum_quantity, return
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     RETURNING *
   `, [
-    name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, 
-    stock_quantity, is_active, image_url, created_by, unit_type, unit_value,
-    expiry_date, manufacture_date, alert_before_days, minimum_quantity
-  ])
+    name, description, finalSellingPrice, buying_price, finalSellingPrice, 
+    sku, category, stock_quantity, stock_quantity, is_active, image_url, created_by, 
+    unit_type, unit_value, expiry_date, manufacture_date, alert_before_days, 
+    minimum_quantity, allowReturn
+  ]);
+  
   return result.rows[0]
 }
 
-export async function listProducts({ page = 1, limit = 10, category, search, is_active } = {}) {
+export async function listProducts({
+  page = 1,
+  limit = 10,
+  category,
+  search,
+  is_active
+} = {}) {
+  
   const offset = (page - 1) * limit
-  let whereConditions = []
-  let params = []
-  let paramIndex = 1
-
-  if (category) {
-    whereConditions.push(`category = $${paramIndex}`)
-    params.push(category)
-    paramIndex++
-  }
-
-  if (search) {
-    whereConditions.push(`(name ILIKE $${paramIndex} OR description ILIKE $${paramIndex} OR sku ILIKE $${paramIndex})`)
-    params.push(`%${search}%`)
-    paramIndex++
-  }
-
-  if (is_active !== undefined) {
-    whereConditions.push(`is_active = $${paramIndex}`)
-    params.push(is_active)
-    paramIndex++
-  }
-
-  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
-
+  const params = []
+  
+  const { whereClause, params: whereParams } = buildWhereClause(
+    { category, search, is_active },
+    params
+  )
+  
   // Get total count
   const countResult = await query(`
     SELECT COUNT(*) as total
     FROM products
     ${whereClause}
-  `, params)
-
-  // Get products
+  `, whereParams)
+  
+  // Get products with creator info
   const result = await query(`
     SELECT p.*, u.name as created_by_name
     FROM products p
     LEFT JOIN users u ON p.created_by = u.id
     ${whereClause}
     ORDER BY p.created_at DESC
-    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-  `, [...params, limit, offset])
-
+    LIMIT $${whereParams.length + 1} OFFSET $${whereParams.length + 2}
+  `, [...whereParams, limit, offset])
+  
+  const total = parseInt(countResult.rows[0].total)
+  
   return {
     products: result.rows,
-    total: parseInt(countResult.rows[0].total),
+    total,
     page,
     limit,
-    totalPages: Math.ceil(parseInt(countResult.rows[0].total) / limit)
+    totalPages: Math.ceil(total / limit)
   }
 }
 
-export async function updateProduct(id, { 
-  name, 
-  description, 
-  price, 
-  buying_price,
-  selling_price,
-  sku, 
-  category, 
-  stock_quantity, 
-  is_active, 
-  image_url,
-  unit_type,
-  unit_value,
-  expiry_date,
-  manufacture_date,
-  alert_before_days,
-  minimum_quantity
-}) {
-  // Use selling_price if provided, otherwise fall back to price for backward compatibility
-  const finalSellingPrice = selling_price || price;
+export async function updateProduct(id, updateData) {
+  const {
+    name,
+    description,
+    price,
+    buying_price,
+    selling_price,
+    sku,
+    category,
+    stock_quantity,
+    is_active,
+    image_url,
+    unit_type,
+    unit_value,
+    expiry_date,
+    manufacture_date,
+    alert_before_days,
+    minimum_quantity,
+    return: allowReturn
+  } = updateData
+  
+  const finalSellingPrice = determineSellingPrice(price, selling_price)
   
   const result = await query(`
     UPDATE products SET 
@@ -143,33 +255,41 @@ export async function updateProduct(id, {
       manufacture_date = $14,
       alert_before_days = $15,
       minimum_quantity = $16,
+      return = $17,
       updated_at = NOW()
-    WHERE id = $17
+    WHERE id = $18
     RETURNING *
   `, [
-    name, description, finalSellingPrice, buying_price, finalSellingPrice, sku, category, 
-    stock_quantity, is_active, image_url, unit_type, unit_value,
-    expiry_date, manufacture_date, alert_before_days, minimum_quantity, id
+    name, description, finalSellingPrice, buying_price, finalSellingPrice, 
+    sku, category, stock_quantity, is_active, image_url, unit_type, unit_value,
+    expiry_date, manufacture_date, alert_before_days, minimum_quantity, allowReturn, id
   ])
+  
   return result.rows[0] || null
 }
 
 export async function deleteProduct(id) {
-  const result = await query('DELETE FROM products WHERE id = $1 RETURNING *', [id])
+  const result = await query(
+    'DELETE FROM products WHERE id = $1 RETURNING *', 
+    [id]
+  )
   return result.rows[0] || null
 }
+
+// ============================================================================
+// BULK OPERATIONS
+// ============================================================================
 
 export async function bulkDeleteProducts(ids) {
   if (!ids || !Array.isArray(ids) || ids.length === 0) {
     return { deleted: [], failed: [] }
   }
-
+  
   const results = {
     deleted: [],
     failed: []
   }
-
-  // Delete products one by one to handle any constraints
+  
   for (const id of ids) {
     try {
       const deleted = await deleteProduct(id)
@@ -182,23 +302,60 @@ export async function bulkDeleteProducts(ids) {
       results.failed.push({ id, error: error.message })
     }
   }
-
+  
   return results
 }
 
-export function getAvailableUnits() {
-  return [
-    { value: 'kg', label: 'Kilograms (kg)' },
-    { value: 'g', label: 'Grams (g)' },
-    { value: 'l', label: 'Liters (l)' },
-    { value: 'ml', label: 'Milliliters (ml)' },
-    { value: 'items', label: 'Items' },
-    { value: 'pcs', label: 'Pieces' },
-    { value: 'bags', label: 'Bags' },
-    { value: 'bottles', label: 'Bottles' },
-    { value: 'packets', label: 'Packets' }
-  ]
+export async function bulkCreateProducts(products, created_by) {
+  const results = {
+    success: [],
+    failed: []
+  }
+  
+  for (const product of products) {
+    try {
+      // Validate SKU uniqueness
+      if (product.sku) {
+        const existing = await findProductBySku(product.sku)
+        if (existing) {
+          results.failed.push({
+            product,
+            error: `SKU ${product.sku} already exists`
+          })
+          continue
+        }
+      }
+      
+      // Extract price variations
+      const priceVariations = product.price_variations || []
+      delete product.price_variations
+      
+      // Create product
+      const created = await createProduct({
+        ...product,
+        created_by
+      })
+      
+      // Create price variations if provided
+      if (priceVariations.length > 0) {
+        await bulkCreatePriceVariations(created.id, priceVariations, created_by)
+      }
+      
+      results.success.push(created)
+    } catch (error) {
+      results.failed.push({
+        product,
+        error: error.message
+      })
+    }
+  }
+  
+  return results
 }
+
+// ============================================================================
+// INVENTORY MANAGEMENT
+// ============================================================================
 
 export async function updateProductQuantities(id, { sold_quantity, available_quantity }) {
   const result = await query(`
@@ -209,6 +366,7 @@ export async function updateProductQuantities(id, { sold_quantity, available_qua
     WHERE id = $3
     RETURNING *
   `, [sold_quantity, available_quantity, id])
+  
   return result.rows[0] || null
 }
 
@@ -221,19 +379,10 @@ export async function adjustStock(id, quantity_change) {
     WHERE id = $2
     RETURNING *
   `, [quantity_change, id])
+  
   return result.rows[0] || null
 }
 
-export async function getProductsLowStock(threshold = 10) {
-  const result = await query(`
-    SELECT * FROM products 
-    WHERE available_quantity <= $1 AND is_active = true
-    ORDER BY available_quantity ASC
-  `, [threshold])
-  return result.rows
-}
-
-// Restock product function
 export async function restockProduct({
   product_id,
   quantity_added,
@@ -243,22 +392,11 @@ export async function restockProduct({
   restocked_by
 }) {
   try {
-    console.log('Restock function called with:', {
-      product_id,
-      quantity_added,
-      expiry_date,
-      manufacture_date,
-      notes,
-      restocked_by
-    })
-
     // Get current product info
     const productResult = await query(
       'SELECT stock_quantity, available_quantity FROM products WHERE id = $1',
       [product_id]
     )
-    
-    console.log('Product query result:', productResult.rows)
     
     if (productResult.rows.length === 0) {
       throw new Error('Product not found')
@@ -268,9 +406,7 @@ export async function restockProduct({
     const previous_stock = currentProduct.stock_quantity
     const new_stock = previous_stock + quantity_added
     
-    console.log('Stock calculation:', { previous_stock, quantity_added, new_stock })
-    
-    // Update product stock
+    // Build update query
     const updateFields = [
       'stock_quantity = stock_quantity + $1',
       'available_quantity = available_quantity + $1',
@@ -279,7 +415,7 @@ export async function restockProduct({
     const updateParams = [quantity_added]
     let paramIndex = 2
     
-    // Update expiry and manufacture dates if provided
+    // Add optional date updates
     if (expiry_date) {
       updateFields.push(`expiry_date = $${paramIndex}`)
       updateParams.push(expiry_date)
@@ -292,6 +428,7 @@ export async function restockProduct({
       paramIndex++
     }
     
+    // Update product
     const updateQuery = `
       UPDATE products SET ${updateFields.join(', ')}
       WHERE id = $${paramIndex}
@@ -299,26 +436,18 @@ export async function restockProduct({
     `
     updateParams.push(product_id)
     
-    console.log('Update query:', updateQuery)
-    console.log('Update params:', updateParams)
-    
     const updatedProduct = await query(updateQuery, updateParams)
     
-    console.log('Product updated successfully')
-    
     // Record restock history
-    const historyInsert = await query(`
+    await query(`
       INSERT INTO restock_history (
         product_id, quantity_added, previous_stock, new_stock, 
         expiry_date, manufacture_date, notes, restocked_by
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      RETURNING *
     `, [
       product_id, quantity_added, previous_stock, new_stock,
       expiry_date, manufacture_date, notes, restocked_by
     ])
-    
-    console.log('Restock history recorded successfully')
     
     return {
       success: true,
@@ -330,12 +459,25 @@ export async function restockProduct({
       }
     }
   } catch (error) {
-    console.error('Restock error details:', error)
+    console.error('Restock error:', error)
     throw error
   }
 }
 
-// Get restock history for a product
+// ============================================================================
+// QUERY & REPORTING
+// ============================================================================
+
+export async function getProductsLowStock(threshold = 10) {
+  const result = await query(`
+    SELECT * FROM products 
+    WHERE available_quantity <= $1 AND is_active = true
+    ORDER BY available_quantity ASC
+  `, [threshold])
+  
+  return result.rows
+}
+
 export async function getRestockHistory(product_id, limit = 50) {
   const result = await query(`
     SELECT 
@@ -351,7 +493,6 @@ export async function getRestockHistory(product_id, limit = 50) {
   return result.rows
 }
 
-// Get products expiring soon
 export async function getProductsExpiringSoon(days_ahead = 7) {
   const result = await query(`
     SELECT 
@@ -372,7 +513,6 @@ export async function getProductsExpiringSoon(days_ahead = 7) {
   return result.rows
 }
 
-// Get products with custom alert timing
 export async function getProductsWithAlerts() {
   const result = await query(`
     SELECT 
@@ -402,106 +542,6 @@ export async function getProductsWithAlerts() {
   return result.rows
 }
 
-// Update product with expiry information
-export async function updateProductExpiry(id, {
-  expiry_date,
-  manufacture_date,
-  alert_before_days,
-  minimum_quantity
-}) {
-  const fields = []
-  const params = []
-  let paramIndex = 1
-  
-  if (expiry_date !== undefined) {
-    fields.push(`expiry_date = $${paramIndex}`)
-    params.push(expiry_date)
-    paramIndex++
-  }
-  
-  if (manufacture_date !== undefined) {
-    fields.push(`manufacture_date = $${paramIndex}`)
-    params.push(manufacture_date)
-    paramIndex++
-  }
-  
-  if (alert_before_days !== undefined) {
-    fields.push(`alert_before_days = $${paramIndex}`)
-    params.push(alert_before_days)
-    paramIndex++
-  }
-  
-  if (minimum_quantity !== undefined) {
-    fields.push(`minimum_quantity = $${paramIndex}`)
-    params.push(minimum_quantity)
-    paramIndex++
-  }
-  
-  if (fields.length === 0) {
-    throw new Error('No fields to update')
-  }
-  
-  fields.push('updated_at = NOW()')
-  params.push(id)
-  
-  const result = await query(`
-    UPDATE products 
-    SET ${fields.join(', ')}
-    WHERE id = $${paramIndex}
-    RETURNING *
-  `, params)
-  
-  return result.rows[0] || null
-}
-
-// Bulk create products
-export async function bulkCreateProducts(products, created_by) {
-  const results = {
-    success: [],
-    failed: []
-  }
-
-  for (const product of products) {
-    try {
-      // Check if SKU exists
-      if (product.sku) {
-        const existing = await findProductBySku(product.sku)
-        if (existing) {
-          results.failed.push({
-            product,
-            error: `SKU ${product.sku} already exists`
-          })
-          continue
-        }
-      }
-
-      // Extract price variations if they exist
-      const priceVariations = product.price_variations || []
-      delete product.price_variations
-
-      const created = await createProduct({
-        ...product,
-        created_by
-      })
-      
-      // Create price variations if provided
-      if (priceVariations.length > 0) {
-        await bulkCreatePriceVariations(created.id, priceVariations, created_by)
-      }
-      
-      results.success.push(created)
-    } catch (error) {
-      results.failed.push({
-        product,
-        error: error.message
-      })
-    }
-  }
-
-  return results
-}
-
-// Get all products for export
 export async function getAllProductsForExport() {
   const result = await query(`
     SELECT 
@@ -550,7 +590,7 @@ export async function getAllProductsForExport() {
     variations = variationsResult.rows
   }
   
-  // Group variations by product_id
+  // Group variations by product
   const variationsByProduct = {}
   variations.forEach(v => {
     if (!variationsByProduct[v.product_id]) {
@@ -559,11 +599,74 @@ export async function getAllProductsForExport() {
     variationsByProduct[v.product_id].push(v)
   })
   
-  // Add variations to products
-  const productsWithVariations = result.rows.map(product => ({
+  // Combine products with variations
+  return result.rows.map(product => ({
     ...product,
     price_variations: variationsByProduct[product.id] || []
   }))
+}
+
+// ============================================================================
+// EXPIRY MANAGEMENT
+// ============================================================================
+
+export async function updateProductExpiry(id, updateData) {
+  const {
+    expiry_date,
+    manufacture_date,
+    alert_before_days,
+    minimum_quantity
+  } = updateData
   
-  return productsWithVariations
+  const fields = []
+  const params = []
+  let paramIndex = 1
+  
+  if (expiry_date !== undefined) {
+    fields.push(`expiry_date = $${paramIndex}`)
+    params.push(expiry_date)
+    paramIndex++
+  }
+  
+  if (manufacture_date !== undefined) {
+    fields.push(`manufacture_date = $${paramIndex}`)
+    params.push(manufacture_date)
+    paramIndex++
+  }
+  
+  if (alert_before_days !== undefined) {
+    fields.push(`alert_before_days = $${paramIndex}`)
+    params.push(alert_before_days)
+    paramIndex++
+  }
+  
+  if (minimum_quantity !== undefined) {
+    fields.push(`minimum_quantity = $${paramIndex}`)
+    params.push(minimum_quantity)
+    paramIndex++
+  }
+  
+  if (fields.length === 0) {
+    throw new Error('No fields to update')
+  }
+  
+  fields.push('updated_at = NOW()')
+  params.push(id)
+  
+  const result = await query(`
+    UPDATE products 
+    SET ${fields.join(', ')}
+    WHERE id = $${paramIndex}
+    RETURNING *
+  `, params)
+  
+  return result.rows[0] || null
+}
+
+// ============================================================================
+// EXPORT UTILITIES
+// ============================================================================
+
+export function getAvailableUnits() {
+  return UNIT_TYPES
 }
