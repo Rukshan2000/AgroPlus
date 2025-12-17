@@ -17,6 +17,10 @@ export async function createReturn({
   const client = await query('BEGIN');
   
   try {
+    // Ensure quantities are integers
+    const qty = parseInt(quantity_returned) || 0;
+    const origQty = parseInt(original_quantity) || 0;
+    
     // Create return record
     const returnResult = await query(`
       INSERT INTO product_returns (
@@ -27,8 +31,8 @@ export async function createReturn({
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
     `, [
-      sale_id, product_id, product_name, quantity_returned,
-      original_quantity, return_reason, refund_amount,
+      sale_id, product_id, product_name, qty,
+      origQty, return_reason, refund_amount,
       restocked, processed_by
     ]);
 
@@ -41,7 +45,7 @@ export async function createReturn({
           sold_quantity = GREATEST(0, sold_quantity - $1),
           updated_at = NOW()
         WHERE id = $2
-      `, [quantity_returned, product_id]);
+      `, [qty, product_id]);
     }
 
     // Get the sale item details to update profit
@@ -52,20 +56,20 @@ export async function createReturn({
     `, [sale_id, product_id]);
 
     if (saleItemResult.rows.length > 0) {
-      const profitPerUnit = saleItemResult.rows[0].profit_per_unit || 0;
+      const profitPerUnit = parseFloat(saleItemResult.rows[0].profit_per_unit) || 0;
       
       // Update sales table profit (reduce profit for returned items)
       await query(`
         UPDATE sales 
         SET 
-          total_profit = GREATEST(0, total_profit - ($1 * $2)),
+          total_profit = GREATEST(0, total_profit - (CAST($1 AS DECIMAL) * CAST($2 AS DECIMAL))),
           updated_at = NOW()
         WHERE id = $3
-      `, [quantity_returned, profitPerUnit, sale_id]);
+      `, [qty, profitPerUnit, sale_id]);
     }
 
     // Update sale return status
-    const returnStatus = quantity_returned >= original_quantity ? 'full' : 'partial';
+    const returnStatus = qty >= origQty ? 'full' : 'partial';
     await query(`
       UPDATE sales 
       SET return_status = $1 

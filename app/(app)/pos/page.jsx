@@ -220,7 +220,7 @@ export default function POSSystem() {
       return item.id === product.id && !item.variationId
     })
     
-    const qty = parseInt(quantity) || 1
+    const qty = parseFloat(quantity) || 1
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
     const discountPercent = parseFloat(discount) || 0
     const discountAmount = (productPrice * discountPercent) / 100
@@ -770,25 +770,13 @@ export default function POSSystem() {
             </Button>
 
             {/* Print Products Button */}
-<<<<<<< HEAD
             <PrintProductsButton products={products} />
 
             {/* Cash Drawer Button */}
             <CashDrawerButton />
-=======
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrintProductList}
-              className="flex items-center gap-2"
-            >
-              <Printer className="h-4 w-4" />
-              Print Products
-            </Button>
 
             {/* Screen Size Changer */}
             <ScreenSizeChanger />
->>>>>>> fix/errors
             
             {/* Session Timer for Cashiers */}
             {isCashier && (
@@ -884,7 +872,7 @@ export default function POSSystem() {
               </label>
               <div className="flex">
                 <button
-                  onClick={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
+                  onClick={() => setQuantity(Math.max(1, (parseFloat(quantity) || 1) - 1).toString())}
                   className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">−</span>
@@ -895,9 +883,10 @@ export default function POSSystem() {
                   onChange={(e) => setQuantity(e.target.value)}
                   className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
                   min="1"
+                  step="0.1"
                 />
                 <button
-                  onClick={() => setQuantity((parseInt(quantity) + 1).toString())}
+                  onClick={() => setQuantity(((parseFloat(quantity) || 1) + 1).toString())}
                   className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
                 >
                   <span className="text-lg font-bold">+</span>
@@ -1106,7 +1095,6 @@ export default function POSSystem() {
                       // Update selected index on click
                       setSelectedProductIndex(index)
                       
-<<<<<<< HEAD
                       // Check if product is already in cart
                       const existingItemIndex = cart.findIndex(item => item.id === product.id)
                       const qty = parseInt(quantity) || 1
@@ -1115,8 +1103,6 @@ export default function POSSystem() {
                       const discountAmount = (productPrice * discountPercent) / 100
                       const finalPrice = productPrice - discountAmount
 
-=======
->>>>>>> fix/errors
                       if (product.available_quantity <= 0) {
                         toast({
                           title: "Out of stock",
@@ -1250,8 +1236,6 @@ export default function POSSystem() {
                 Cart ({cart.length} items)
               </h3>
 
-<<<<<<< HEAD
-=======
               {/* Quick Add Shopping Bags */}
               <div className="mb-3 p-2 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-200 dark:border-orange-800">
                 <div className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-2">
@@ -1429,8 +1413,6 @@ export default function POSSystem() {
                   </button>
                 </div>
               </div>
-
->>>>>>> fix/errors
               {/* Cart Items */}
               <div className="max-h-64 overflow-y-auto mb-4">
                 {cart.length === 0 ? (
@@ -1458,26 +1440,27 @@ export default function POSSystem() {
                           </button>
                         </div>
                         <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-1">
+                          <div className="flex">
                             <button
-                              onClick={() => updateQuantity(index, item.quantity - 1)}
-                              className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
+                              onClick={() => updateQuantity(index, Math.max(1, (parseFloat(item.quantity) || 1) - 1))}
+                              className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
                             >
-                              −
+                              <span className="text-lg font-bold">−</span>
                             </button>
                             <input
                               type="number"
                               value={item.quantity}
-                              onChange={(e) => updateQuantity(index, parseInt(e.target.value) || 1)}
-                              className="w-12 h-7 text-center text-sm font-mono bg-white dark:bg-black border border-gray-300 dark:border-gray-600 rounded"
-                              min="1"
+                              onChange={(e) => updateQuantity(index, parseFloat(e.target.value) || 1)}
+                              className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
+                              min="0"
                               max={item.availableStock}
+                              step="0.1"
                             />
                             <button
-                              onClick={() => updateQuantity(index, item.quantity + 1)}
-                              className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
+                              onClick={() => updateQuantity(index, (parseFloat(item.quantity) || 1) + 1)}
+                              className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
                             >
-                              +
+                              <span className="text-lg font-bold">+</span>
                             </button>
                           </div>
                           <div className="text-right">

@@ -71,11 +71,15 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
       );
       const data = await response.json();
       if (response.ok) {
-        setRecentSales(data.sales || []);
-        if (!data.sales || data.sales.length === 0) {
+        // Filter out non-returnable sales
+        const returnableSales = (data.sales || []).filter(sale => sale.return !== false);
+        console.log('Loaded sales:', { total: data.sales?.length, returnable: returnableSales.length, data: returnableSales });
+        setRecentSales(returnableSales);
+        
+        if (!returnableSales || returnableSales.length === 0) {
           toast({
             title: "No Sales Found",
-            description: "There are no sales from the last 7 days to process returns for.",
+            description: "There are no returnable sales from the last 7 days to process returns for.",
             variant: "default",
           });
         }
@@ -188,16 +192,24 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
     return pricePerUnit * formData.quantity_returned;
   };
 
-  const filteredSales = saleSearch
-    ? recentSales.filter(
-        (sale) =>
-          sale.return !== false && (
-            sale.id.toString().includes(saleSearch) ||
-            sale.product_name?.toLowerCase().includes(saleSearch.toLowerCase()) ||
-            sale.sku?.toLowerCase().includes(saleSearch.toLowerCase())
-          )
-      )
-    : recentSales.filter(sale => sale.return !== false).slice(0, 10);
+  const filteredSales = (() => {
+    // recentSales is already filtered for returnable items in loadRecentSales
+    if (!saleSearch || saleSearch.trim() === '') {
+      return recentSales.slice(0, 10);
+    }
+    
+    const searchLower = saleSearch.toLowerCase();
+    const results = recentSales.filter((sale) => {
+      const idMatch = sale.id?.toString().includes(saleSearch);
+      const productNameMatch = sale.product_name?.toLowerCase().includes(searchLower);
+      const skuMatch = sale.sku?.toLowerCase().includes(searchLower);
+      
+      return idMatch || productNameMatch || skuMatch;
+    });
+    
+    console.log('Search results:', { saleSearch, totalSales: recentSales.length, filtered: results.length, results });
+    return results;
+  })();
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
