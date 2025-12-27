@@ -42,7 +42,7 @@ export async function processReturn(data, userId) {
   // Calculate refund amount (proportional to quantity)
   const refund_amount = (eligibility.sale.total_amount / eligibility.sale.quantity) * qty;
 
-  // Create the return
+  // Create the return with outlet_id from the original sale
   const returnRecord = await createReturn({
     sale_id,
     product_id,
@@ -52,7 +52,8 @@ export async function processReturn(data, userId) {
     return_reason: return_reason || 'No reason provided',
     refund_amount,
     restocked,
-    processed_by: userId
+    processed_by: userId,
+    outlet_id: eligibility.sale.outlet_id
   });
 
   return {
@@ -72,8 +73,8 @@ export async function getAllReturns(filters = {}) {
 /**
  * Get return statistics
  */
-export async function getStatistics(days = 30) {
-  return await getReturnStats(days);
+export async function getStatistics(days = 30, outlet_id = null) {
+  return await getReturnStats(days, outlet_id);
 }
 
 /**

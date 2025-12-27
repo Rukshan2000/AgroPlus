@@ -38,6 +38,7 @@ export default function POSSystem() {
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [saleId, setSaleId] = useState(null) // Store sale ID for receipt
   const [selectedProductIndex, setSelectedProductIndex] = useState(0) // For arrow key navigation
+  const [selectedOutlet, setSelectedOutlet] = useState(null) // Store selected outlet
   const { toast } = useToast()
   const { session } = useSession()
   const isCashier = session?.user?.role === 'cashier'
@@ -61,7 +62,12 @@ export default function POSSystem() {
 
   // Load products on component mount
   useEffect(() => {
-    loadProducts()
+    // Get selected outlet from localStorage
+    const outletId = localStorage.getItem('selectedOutlet')
+    if (outletId) {
+      setSelectedOutlet(parseInt(outletId))
+    }
+    loadProducts(outletId)
   }, [])
 
   // Session timer effect
@@ -102,21 +108,42 @@ export default function POSSystem() {
     setFilteredProducts(sortedProducts)
   }, [productSearch, products, sortBy, sortOrder])
 
-  const loadProducts = async () => {
+  const loadProducts = async (outletId) => {
     try {
-      const response = await fetch('/api/products?limit=100&is_active=true');
-      if (response.ok) {
-        const data = await response.json();
-        setProducts(data.products || []);
+      let url
+      
+      // If outlet is selected, load distributed products for that outlet
+      if (outletId) {
+        url = `/api/products/distributed?outlet_id=${outletId}&limit=100&is_active=true`
       } else {
-        throw new Error('Failed to fetch products');
+        // Fallback to all active products if no outlet
+        url = '/api/products?limit=100&is_active=true'
+      }
+
+      const response = await fetch(url)
+      if (response.ok) {
+        const data = await response.json()
+        setProducts(data.products || [])
+      } else {
+        throw new Error('Failed to fetch products')
       }
     } catch (error) {
+      console.error('Error loading products:', error)
       toast({
         title: "Error",
         description: "Failed to load products",
         variant: "destructive"
       })
+      // Fallback to all products on error
+      try {
+        const response = await fetch('/api/products?limit=100&is_active=true')
+        if (response.ok) {
+          const data = await response.json()
+          setProducts(data.products || [])
+        }
+      } catch (fallbackError) {
+        console.error('Fallback product load failed:', fallbackError)
+      }
     }
   }
 
@@ -522,6 +549,7 @@ export default function POSSystem() {
   const processSale = async (payment) => {
     setIsLoading(true)
     try {
+      const outletId = localStorage.getItem('selectedOutlet')
       const saleData = {
         items: cart.map(item => ({
           product_id: item.id,
@@ -542,7 +570,8 @@ export default function POSSystem() {
         amount_paid: payment.amount_paid,
         change_given: payment.change,
         cashier_id: session?.user?.id,
-        cashier_name: session?.user?.name
+        cashier_name: session?.user?.name,
+        outlet_id: outletId ? parseInt(outletId) : null
       }
 
       const response = await fetch('/api/sales', {
@@ -563,7 +592,7 @@ export default function POSSystem() {
           title: "Sale completed",
           description: "Transaction processed successfully"
         });
-        loadProducts();
+        loadProducts(outletId);
       } else {
         const error = await response.json();
         throw new Error(error.message || 'Failed to process sale');
@@ -581,7 +610,8 @@ export default function POSSystem() {
 
   // Handle return success - reload products
   const handleReturnSuccess = () => {
-    loadProducts()
+    const outletId = localStorage.getItem('selectedOutlet')
+    loadProducts(outletId)
     toast({
       title: "Return Processed",
       description: "Inventory has been updated",
@@ -748,6 +778,11 @@ export default function POSSystem() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             Point of Sale System
+            {selectedOutlet && (
+              <span className="ml-2 text-sm font-normal bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 px-3 py-1 rounded-full border border-green-300 dark:border-green-700">
+                {localStorage.getItem('selectedOutletName') || `Outlet #${selectedOutlet}`}
+              </span>
+            )}
           </h1>
           
           <div className="flex items-center gap-4">
@@ -958,7 +993,7 @@ export default function POSSystem() {
                     {findProduct(productId).name}
                   </span>
                   <span className="ml-2 text-sm text-blue-700 dark:text-blue-300">
-                    (Stock: {findProduct(productId).available_quantity})
+                    (Outlet Stock: {findProduct(productId).available_quantity})
                   </span>
                 </div>
                 <div className="text-right">
@@ -1206,7 +1241,7 @@ export default function POSSystem() {
                             {discount}% OFF
                           </div>
                         )}
-                        <span className={`text-xs px-2 py-1 rounded ${
+                        <span className={`text-xs px-2 py-1 rounded font-semibold ${
                           product.available_quantity > 10 
                             ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
                             : product.available_quantity > 0

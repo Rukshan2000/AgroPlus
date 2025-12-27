@@ -12,7 +12,8 @@ export async function createSale({
   payment_method = 'cash',
   amount_paid,
   change_given = 0,
-  created_by
+  created_by,
+  outlet_id = null
 }) {
   // Get the product's buying price for profit calculation
   const productResult = await query('SELECT buying_price, selling_price FROM products WHERE id = $1', [product_id]);
@@ -28,20 +29,22 @@ export async function createSale({
       product_id, product_name, quantity, unit_price, original_price, 
       discount_percentage, discount_amount, total_amount, 
       payment_method, amount_paid, change_given, created_by,
-      buying_price_at_sale, profit_per_unit, total_profit, profit_margin_percentage
+      buying_price_at_sale, profit_per_unit, total_profit, profit_margin_percentage,
+      outlet_id
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *
   `, [
     product_id, product_name, quantity, unit_price, original_price,
     discount_percentage, discount_amount, total_amount,
     payment_method, amount_paid, change_given, created_by,
-    buying_price_at_sale, profit_per_unit, total_profit, profit_margin_percentage
+    buying_price_at_sale, profit_per_unit, total_profit, profit_margin_percentage,
+    outlet_id
   ])
   return result.rows[0]
 }
 
-export async function listSales({ page = 1, limit = 10, start_date, end_date, product_id } = {}) {
+export async function listSales({ page = 1, limit = 10, start_date, end_date, product_id, outlet_id } = {}) {
   const offset = (page - 1) * limit
   let whereConditions = []
   let params = []
@@ -62,6 +65,12 @@ export async function listSales({ page = 1, limit = 10, start_date, end_date, pr
   if (product_id) {
     whereConditions.push(`s.product_id = $${paramIndex}`)
     params.push(product_id)
+    paramIndex++
+  }
+
+  if (outlet_id) {
+    whereConditions.push(`s.outlet_id = $${paramIndex}`)
+    params.push(outlet_id)
     paramIndex++
   }
 
@@ -104,7 +113,8 @@ export async function getSaleById(id) {
   return result.rows[0] || null
 }
 
-export async function getSalesStats() {
+export async function getSalesStats(outlet_id = null) {
+  const whereClause = outlet_id ? `WHERE outlet_id = ${outlet_id}` : ''
   const result = await query(`
     SELECT 
       COUNT(*) as total_sales,
@@ -115,6 +125,7 @@ export async function getSalesStats() {
       AVG(profit_margin_percentage) as average_profit_margin,
       SUM(total_amount) - SUM(total_profit) as total_cost
     FROM sales
+    ${whereClause}
   `)
   return result.rows[0]
 }
@@ -193,7 +204,9 @@ export async function getLowStockAlerts() {
   return result.rows
 }
 
-export async function getTopSellingProducts(limit = 10) {
+export async function getTopSellingProducts(limit = 10, outlet_id = null) {
+  const whereClause = outlet_id ? `WHERE s.outlet_id = $2` : ''
+  const params = outlet_id ? [limit, outlet_id] : [limit]
   const result = await query(`
     SELECT 
       p.id,
@@ -209,10 +222,11 @@ export async function getTopSellingProducts(limit = 10) {
       AVG(s.profit_margin_percentage) as avg_profit_margin
     FROM sales s
     JOIN products p ON s.product_id = p.id
+    ${whereClause}
     GROUP BY p.id, p.name, p.sku, p.category, p.buying_price, p.selling_price
     ORDER BY total_quantity_sold DESC
     LIMIT $1
-  `, [limit])
+  `, params)
   return result.rows
 }
 

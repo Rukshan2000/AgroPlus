@@ -60,7 +60,8 @@ export async function GET(request) {
 
     // Get statistics
     if (statsOnly) {
-      const stats = await getStatistics(parseInt(days));
+      const outlet_id = searchParams.get('outlet_id');
+      const stats = await getStatistics(parseInt(days), outlet_id ? parseInt(outlet_id) : null);
       return NextResponse.json(stats);
     }
 
@@ -69,12 +70,14 @@ export async function GET(request) {
     const limit = parseInt(searchParams.get('limit') || '10');
     const start_date = searchParams.get('start_date');
     const end_date = searchParams.get('end_date');
+    const outlet_id = searchParams.get('outlet_id');
 
     const returns = await getAllReturns({
       page,
       limit,
       start_date,
-      end_date
+      end_date,
+      outlet_id: outlet_id ? parseInt(outlet_id) : null
     });
 
     return NextResponse.json(returns);

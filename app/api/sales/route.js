@@ -19,7 +19,8 @@ export async function POST(request) {
       bill_discount_amount = 0,
       payment_method = 'cash', 
       amount_paid, 
-      change_given = 0 
+      change_given = 0,
+      outlet_id = null
     } = body
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -69,7 +70,8 @@ export async function POST(request) {
           payment_method,
           amount_paid: amount_paid / items.length, // Distribute payment across items
           change_given: change_given / items.length, // Distribute change across items
-          created_by: session.user.id
+          created_by: session.user.id,
+          outlet_id
         })
 
         sales.push(sale)
@@ -128,13 +130,15 @@ export async function GET(request) {
     const start_date = searchParams.get('start_date')
     const end_date = searchParams.get('end_date')
     const product_id = searchParams.get('product_id')
+    const outlet_id = searchParams.get('outlet_id')
     const stats = searchParams.get('stats')
 
     if (stats === 'true') {
+      const outletIdParam = outlet_id ? parseInt(outlet_id) : null
       const [generalStats, dailyStats, topProducts] = await Promise.all([
-        getSalesStats(),
+        getSalesStats(outletIdParam),
         getDailySalesStats(30),
-        getTopSellingProducts(10)
+        getTopSellingProducts(10, outletIdParam)
       ])
 
       return Response.json({
@@ -149,7 +153,8 @@ export async function GET(request) {
       limit,
       start_date,
       end_date,
-      product_id
+      product_id,
+      outlet_id
     })
 
     return Response.json(result)

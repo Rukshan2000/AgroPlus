@@ -39,12 +39,14 @@ export default function SalesPage() {
   const [sales, setSales] = useState([])
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [outlets, setOutlets] = useState([])
   const [filters, setFilters] = useState({
     page: 1,
     limit: 10,
     start_date: '',
     end_date: '',
-    product_id: ''
+    product_id: '',
+    outlet_id: ''
   })
   const [pagination, setPagination] = useState({
     total: 0,
@@ -55,9 +57,22 @@ export default function SalesPage() {
   const { toast } = useToast()
 
   useEffect(() => {
+    loadOutlets()
     loadSalesData()
     loadStats()
   }, [filters])
+
+  const loadOutlets = async () => {
+    try {
+      const response = await fetch('/api/outlets?limit=1000')
+      if (response.ok) {
+        const data = await response.json()
+        setOutlets(data.outlets || [])
+      }
+    } catch (error) {
+      console.error('Failed to load outlets:', error)
+    }
+  }
 
   const loadSalesData = async () => {
     try {
@@ -89,7 +104,11 @@ export default function SalesPage() {
 
   const loadStats = async () => {
     try {
-      const response = await fetch('/api/sales?stats=true')
+      const params = new URLSearchParams({ stats: 'true' })
+      if (filters.outlet_id) {
+        params.set('outlet_id', filters.outlet_id.toString())
+      }
+      const response = await fetch(`/api/sales?${params}`)
       if (response.ok) {
         const data = await response.json()
         setStats(data)
@@ -225,7 +244,26 @@ export default function SalesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="outlet-id">Outlet</Label>
+              <Select 
+                value={filters.outlet_id ? filters.outlet_id.toString() : "all"} 
+                onValueChange={(value) => handleFilterChange('outlet_id', value === 'all' ? '' : parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All Outlets" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Outlets</SelectItem>
+                  {outlets.map((outlet) => (
+                    <SelectItem key={outlet.id} value={outlet.id.toString()}>
+                      {outlet.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="start-date">Start Date</Label>
               <Input
@@ -295,6 +333,7 @@ export default function SalesPage() {
                     <TableHead>Sale ID</TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>SKU</TableHead>
+                    <TableHead>Outlet</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Unit Price</TableHead>
                     <TableHead>Discount</TableHead>
@@ -321,6 +360,11 @@ export default function SalesPage() {
                         <Badge variant="secondary">
                           {sale.sku || 'N/A'}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {outlets.find(o => o.id === sale.outlet_id)?.name || (
+                          <span className="text-gray-400 text-sm">Unassigned</span>
+                        )}
                       </TableCell>
                       <TableCell>{sale.quantity}</TableCell>
                       <TableCell>{formatCurrency(sale.unit_price)}</TableCell>

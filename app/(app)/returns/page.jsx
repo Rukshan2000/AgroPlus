@@ -30,20 +30,42 @@ export default function ReturnsPage() {
   const [returns, setReturns] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [outlets, setOutlets] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [outletFilter, setOutletFilter] = useState("");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const limit = 10;
 
   useEffect(() => {
+    loadOutlets();
     fetchReturns();
     fetchStats();
-  }, [page]);
+  }, [page, outletFilter]);
+
+  const loadOutlets = async () => {
+    try {
+      const response = await fetch('/api/outlets?limit=1000');
+      if (response.ok) {
+        const data = await response.json();
+        setOutlets(data.outlets || []);
+      }
+    } catch (error) {
+      console.error('Failed to load outlets:', error);
+    }
+  };
 
   const fetchReturns = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/returns?page=${page}&limit=${limit}`);
+      const params = new URLSearchParams();
+      params.set('page', page);
+      params.set('limit', limit);
+      if (outletFilter) {
+        params.set('outlet_id', outletFilter);
+      }
+      
+      const response = await fetch(`/api/returns?${params}`);
       const data = await response.json();
       
       if (response.ok) {
@@ -65,7 +87,12 @@ export default function ReturnsPage() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch("/api/returns?stats=true&days=30");
+      const params = new URLSearchParams({ stats: 'true', days: '30' });
+      if (outletFilter) {
+        params.set('outlet_id', outletFilter);
+      }
+      
+      const response = await fetch(`/api/returns?${params}`);
       const data = await response.json();
       
       if (response.ok) {
@@ -155,19 +182,39 @@ export default function ReturnsPage() {
       {/* Returns Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <CardTitle>Return History</CardTitle>
               <CardDescription>Complete list of all product returns</CardDescription>
             </div>
-            <div className="relative w-64">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search returns..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
+            <div className="flex gap-4 items-end">
+              <div className="w-48">
+                <label className="text-sm font-medium text-muted-foreground">Filter by Outlet</label>
+                <select 
+                  value={outletFilter} 
+                  onChange={(e) => {
+                    setOutletFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  className="w-full mt-1 px-3 py-2 border rounded-md bg-white dark:bg-slate-950 border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                >
+                  <option value="">All Outlets</option>
+                  {outlets.map((outlet) => (
+                    <option key={outlet.id} value={outlet.id}>
+                      {outlet.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="relative w-64">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search returns..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -188,6 +235,7 @@ export default function ReturnsPage() {
                     <TableHead>Return ID</TableHead>
                     <TableHead>Sale ID</TableHead>
                     <TableHead>Product</TableHead>
+                    <TableHead>Outlet</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Quantity</TableHead>
                     <TableHead>Refund</TableHead>
@@ -205,6 +253,11 @@ export default function ReturnsPage() {
                         <Badge variant="outline">Sale #{returnItem.sale_id}</Badge>
                       </TableCell>
                       <TableCell>{returnItem.product_name}</TableCell>
+                      <TableCell>
+                        {outlets.find(o => o.id === returnItem.outlet_id)?.name || (
+                          <span className="text-gray-400 text-sm">Unassigned</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {returnItem.customer_name || "Walk-in"}
                       </TableCell>
