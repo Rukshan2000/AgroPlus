@@ -14,7 +14,6 @@ import PaymentModal from '@/components/pos/payment-modal'
 import PrintProductsButton from '@/components/pos/print-products-button'
 import CashDrawerButton from '@/components/pos/cash-drawer-button'
 import { Button } from '@/components/ui/button'
-import { ConnectionStatusBadge } from '@/components/connection-status'
 import ThemeToggle from '@/components/theme-toggle'
 import ScreenSizeChanger from '@/components/pos/screen-size-changer'
 
@@ -752,11 +751,8 @@ export default function POSSystem() {
           </h1>
           
           <div className="flex items-center gap-4">
-            {/* Connection Status + Theme Toggle */}
-            <div className="flex items-center gap-2">
-              <ConnectionStatusBadge />
-              <ThemeToggle />
-            </div>
+            {/* Theme Toggle */}
+            <ThemeToggle />
             
             {/* Returns Button */}
             <Button

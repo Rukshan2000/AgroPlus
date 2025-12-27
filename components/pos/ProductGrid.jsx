@@ -7,7 +7,6 @@ import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Search, Grid3X3, List, Package } from 'lucide-react'
-import offlineProductModel from '@/models/offlineProductModel'
 
 export default function ProductGrid({
   productSearch,

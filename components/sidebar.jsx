@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3, Clock, DollarSign, ChevronDown, ChevronRight, Star, Gift, Undo2 } from "lucide-react"
+import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3, Clock, DollarSign, ChevronDown, ChevronRight, Star, Gift, Undo2, MapPin } from "lucide-react"
 
 import {
   Sidebar as UiSidebar,
@@ -154,6 +154,15 @@ function NavMenu({ role }) {
         { href: "/customers", label: "Customers", icon: Users, roles: ["admin", "manager", "user"] },
         { href: "/loyalty", label: "Program Settings", icon: Settings, roles: ["admin", "manager"] },
         { href: "/rewards", label: "Rewards", icon: Gift, roles: ["admin", "manager", "user"] },
+      ]
+    },
+    {
+      key: "outlets",
+      label: "Outlets",
+      icon: MapPin,
+      collapsible: false,
+      items: [
+        { href: "/outlets", label: "Outlets", icon: MapPin, roles: ["admin", "manager"] },
       ]
     },
     {

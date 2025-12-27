@@ -54,7 +54,7 @@ export async function register(request) {
   // Ensure CSRF token is set for client
   await getOrCreateCsrfToken()
   return NextResponse.json(
-    { user: { id: user.id, email: user.email, name: user.name, role: user.role } },
+    { user: { id: user.id, email: user.email, name: user.name, role: user.role, outlets: user.outlets || [] } },
     { status: 201 },
   )
 }
@@ -94,7 +94,7 @@ export async function login(request) {
     }
   }
   
-  return NextResponse.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } })
+  return NextResponse.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role, outlets: user.outlets || [] } })
 }
 
 export async function logout(request) {

@@ -88,7 +88,6 @@ This document summarizes all major features of the SaaS system based on the code
 
 - **Database**
   - PostgreSQL for persistent storage
-  - CouchDB/PouchDB for offline/local storage
   - Database migrations and seeding scripts
 
 ## Advanced Features
@@ -130,7 +129,7 @@ This document summarizes all major features of the SaaS system based on the code
 - `/login`, `/register`
 - `/forbidden` (403), `/not-found` (404)
 - `/pos` (Point of Sale)
-- `/categories`, `/products`, `/sales`, `/hr`, `/hr/payroll`, `/offline-test`
+- `/categories`, `/products`, `/sales`, `/hr`, `/hr/payroll`, `/outlets`
 
 ## Components
 - Sidebar, theme toggle, auth form, users table, products table, categories table, modals for add/update/delete, POS components (cart, product grid, receipt)

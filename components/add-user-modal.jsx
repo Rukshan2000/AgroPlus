@@ -7,18 +7,21 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Plus } from 'lucide-react'
 
 export default function AddUserModal({ onUserAdded }) {
   const [open, setOpen] = useState(false)
   const [csrf, setCsrf] = useState('')
+  const [outlets, setOutlets] = useState([])
   const [form, setForm] = useState({
     email: '',
     password: '',
     name: '',
     role: 'user',
     hourlyRate: '',
-    position: ''
+    position: '',
+    outlets: []
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -30,6 +33,24 @@ export default function AddUserModal({ onUserAdded }) {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    if (open) {
+      fetchOutlets()
+    }
+  }, [open])
+
+  async function fetchOutlets() {
+    try {
+      const res = await fetch('/api/outlets?action=active')
+      if (res.ok) {
+        const data = await res.json()
+        setOutlets(data.outlets || [])
+      }
+    } catch (error) {
+      console.error('Error fetching outlets:', error)
+    }
+  }
+
   const resetForm = () => {
     setForm({
       email: '',
@@ -37,9 +58,19 @@ export default function AddUserModal({ onUserAdded }) {
       name: '',
       role: 'user',
       hourlyRate: '',
-      position: ''
+      position: '',
+      outlets: []
     })
     setError('')
+  }
+
+  const handleOutletToggle = (outletId) => {
+    setForm(prev => ({
+      ...prev,
+      outlets: prev.outlets.includes(outletId)
+        ? prev.outlets.filter(id => id !== outletId)
+        : [...prev.outlets, outletId]
+    }))
   }
 
   const handleSubmit = async (e) => {
@@ -82,11 +113,11 @@ export default function AddUserModal({ onUserAdded }) {
           Add User
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            Create a new user account with payroll information.
+            Create a new user account with payroll information and outlet assignments.
           </DialogDescription>
         </DialogHeader>
         
@@ -174,6 +205,34 @@ export default function AddUserModal({ onUserAdded }) {
             </>
           )}
 
+          {outlets.length > 0 && (
+            <div className="space-y-2">
+              <Label>Assign Outlets</Label>
+              <div className="border rounded-md p-3 space-y-2 max-h-40 overflow-y-auto">
+                {outlets.map((outlet) => (
+                  <div key={outlet.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`outlet-${outlet.id}`}
+                      checked={form.outlets.includes(outlet.id)}
+                      onCheckedChange={() => handleOutletToggle(outlet.id)}
+                    />
+                    <Label 
+                      htmlFor={`outlet-${outlet.id}`}
+                      className="cursor-pointer font-normal"
+                    >
+                      {outlet.name}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              {form.outlets.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {form.outlets.length} outlet(s) selected
+                </p>
+              )}
+            </div>
+          )}
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
@@ -187,3 +246,4 @@ export default function AddUserModal({ onUserAdded }) {
     </Dialog>
   )
 }
+
