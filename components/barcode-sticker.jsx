@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Barcode from "react-barcode"
+import JsBarcode from "jsbarcode"
 import { Button } from "@/components/ui/button"
 import { 
   Dialog, 
@@ -30,65 +31,82 @@ export default function BarcodeSticker({ isOpen, onClose, product }) {
   const handleDownload = () => {
     setIsGenerating(true)
     try {
-      // Get the barcode canvas
-      const canvas = document.querySelector('#barcode-canvas canvas')
-      if (canvas) {
-        // Create a new canvas with proper dimensions and styling
-        const printCanvas = document.createElement('canvas')
-        const ctx = printCanvas.getContext('2d')
-        
-        // Set canvas size for standard barcode sticker (2" x 1" at 300 DPI)
-        printCanvas.width = 600  // 2 inches * 300 DPI
-        printCanvas.height = 300 // 1 inch * 300 DPI
-        
-        // White background
-        ctx.fillStyle = 'white'
-        ctx.fillRect(0, 0, printCanvas.width, printCanvas.height)
-        
-        // Draw barcode centered
-        const barcodeWidth = 540  // Leave small margins
-        const barcodeHeight = 120
-        const barcodeX = (printCanvas.width - barcodeWidth) / 2
-        const barcodeY = 30
-        
-        ctx.drawImage(canvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight)
-        
-        // Add barcode number below barcode
-        ctx.fillStyle = 'black'
-        ctx.textAlign = 'center'
-        
-        // Barcode number in monospace font
-        ctx.font = 'bold 20px monospace'
-        const paddedId = product.id.toString().padStart(12, '0')
-        ctx.fillText(paddedId, printCanvas.width / 2, barcodeY + barcodeHeight + 25)
-        
-        // Product name (smaller to fit)
-        const maxNameLength = 25
-        const productName = product.name.length > maxNameLength 
-          ? product.name.substring(0, maxNameLength) + '...' 
-          : product.name
-        ctx.font = '14px Arial'
-        ctx.fillText(productName, printCanvas.width / 2, barcodeY + barcodeHeight + 45)
-        
-        // SKU if available (very small)
-        if (product.sku) {
-          ctx.font = '12px Arial'
-          ctx.fillStyle = '#666666'
-          ctx.fillText(`SKU: ${product.sku}`, printCanvas.width / 2, barcodeY + barcodeHeight + 65)
-        }
-        
-        // Convert to blob and download
-        printCanvas.toBlob((blob) => {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `barcode-${product.id}-${product.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`
-          document.body.appendChild(a)
-          a.click()
-          document.body.removeChild(a)
-          URL.revokeObjectURL(url)
+      // Create a temporary canvas for the barcode with proper resolution
+      const tempCanvas = document.createElement('canvas')
+      const tempCtx = tempCanvas.getContext('2d')
+      
+      // Generate barcode at high resolution
+      tempCanvas.width = 800
+      tempCanvas.height = 200
+      tempCtx.fillStyle = 'white'
+      tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height)
+      
+      // Use jsbarcode to draw directly on canvas
+      const paddedId = product.id.toString().padStart(12, '0')
+      
+      try {
+        JsBarcode(tempCanvas, paddedId, {
+          format: 'EAN13',
+          width: 2.5,
+          height: 100,
+          displayValue: true,
+          fontSize: 16,
+          margin: 10
         })
+      } catch (err) {
+        console.error('Error generating barcode:', err)
       }
+      
+      // Create final high-res canvas for download
+      const printCanvas = document.createElement('canvas')
+      const ctx = printCanvas.getContext('2d')
+      
+      // Set canvas size for standard barcode sticker (2" x 1" at 300 DPI)
+      printCanvas.width = 600  // 2 inches * 300 DPI
+      printCanvas.height = 300 // 1 inch * 300 DPI
+      
+      // White background
+      ctx.fillStyle = 'white'
+      ctx.fillRect(0, 0, printCanvas.width, printCanvas.height)
+      
+      // Draw barcode centered
+      const barcodeWidth = 540  // Leave small margins
+      const barcodeHeight = 150
+      const barcodeX = (printCanvas.width - barcodeWidth) / 2
+      const barcodeY = 20
+      
+      ctx.drawImage(tempCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight)
+      
+      // Add barcode number below barcode
+      ctx.fillStyle = 'black'
+      ctx.textAlign = 'center'
+      
+      // Product name
+      const maxNameLength = 25
+      const productName = product.name.length > maxNameLength 
+        ? product.name.substring(0, maxNameLength) + '...' 
+        : product.name
+      ctx.font = 'bold 14px Arial'
+      ctx.fillText(productName, printCanvas.width / 2, barcodeY + barcodeHeight + 20)
+      
+      // SKU if available (very small)
+      if (product.sku) {
+        ctx.font = '12px Arial'
+        ctx.fillStyle = '#666666'
+        ctx.fillText(`SKU: ${product.sku}`, printCanvas.width / 2, barcodeY + barcodeHeight + 38)
+      }
+      
+      // Convert to blob and download
+      printCanvas.toBlob((blob) => {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `barcode-${product.id}-${product.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      })
     } catch (error) {
       console.error('Error downloading barcode:', error)
       alert('Failed to download barcode')

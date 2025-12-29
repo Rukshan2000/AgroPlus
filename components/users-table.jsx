@@ -5,14 +5,17 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Pencil } from "lucide-react"
+import { Pencil, QrCode } from "lucide-react"
 import AddUserModal from "./add-user-modal"
 import EditUserOutletsModal from "./edit-user-outlets-modal"
+import { BarcodeGenerateModal } from "./barcode-generate-modal"
 
 export default function UsersTable({ initialUsers = [] }) {
   const [users, setUsers] = useState(initialUsers)
   const [selectedUser, setSelectedUser] = useState(null)
   const [isOutletModalOpen, setIsOutletModalOpen] = useState(false)
+  const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false)
+  const [barcodeUser, setBarcodeUser] = useState(null)
 
   async function updateRole(userId, role) {
     const csrf = await fetch("/api/auth/csrf")
@@ -44,6 +47,16 @@ export default function UsersTable({ initialUsers = [] }) {
   const handleOutletsUpdated = (updatedUser) => {
     setUsers(users.map((u) => (u.id === updatedUser.id ? updatedUser : u)))
     setIsOutletModalOpen(false)
+  }
+
+  const handleGenerateBarcode = (user) => {
+    setBarcodeUser(user)
+    setIsBarcodeModalOpen(true)
+  }
+
+  const handleBarcodeGenerated = (data) => {
+    // Update user with barcode info
+    setUsers(users.map((u) => (u.id === data.user.id ? { ...u, barcode_id: data.barcodeId } : u)))
   }
 
   return (
@@ -82,6 +95,14 @@ export default function UsersTable({ initialUsers = [] }) {
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={() => handleGenerateBarcode(u)}
+                    title="Generate barcode"
+                  >
+                    <QrCode className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => handleEditOutlets(u)}
                     title="Edit outlets"
                   >
@@ -111,6 +132,18 @@ export default function UsersTable({ initialUsers = [] }) {
           onClose={() => setIsOutletModalOpen(false)}
           user={selectedUser}
           onSuccess={handleOutletsUpdated}
+        />
+      )}
+
+      {barcodeUser && (
+        <BarcodeGenerateModal
+          isOpen={isBarcodeModalOpen}
+          onClose={() => {
+            setIsBarcodeModalOpen(false)
+            setBarcodeUser(null)
+          }}
+          user={barcodeUser}
+          onSuccess={handleBarcodeGenerated}
         />
       )}
     </>

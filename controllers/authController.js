@@ -25,15 +25,15 @@ export async function register(request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input", details: parsed.error.flatten() }, { status: 400 })
   }
-  const { email, password, name, role = "user", hourlyRate, position } = parsed.data
+  const { email, password, name, role = "user", hourlyRate, position, generateBarcode = false } = parsed.data
   const existing = await findUserByEmail(email)
   if (existing) {
     return NextResponse.json({ error: "Email already registered" }, { status: 409 })
   }
   const password_hash = await hashPassword(password)
   
-  // Create user with specified role
-  const user = await createUser({ email, password_hash, name, role })
+  // Create user with specified role and optional barcode
+  const user = await createUser({ email, password_hash, name, role, generateBarcode })
   
   // Create payroll info if hourly rate is provided (for cashiers/employees)
   if (hourlyRate && (role === 'cashier' || role === 'user')) {
@@ -53,8 +53,19 @@ export async function register(request) {
   await createSession(user.id)
   // Ensure CSRF token is set for client
   await getOrCreateCsrfToken()
+  
+  // Return barcode ID if generated (only shown once)
   return NextResponse.json(
-    { user: { id: user.id, email: user.email, name: user.name, role: user.role, outlets: user.outlets || [] } },
+    {
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        outlets: user.outlets || []
+      },
+      ...(user.plainBarcodeId && { barcodeId: user.plainBarcodeId })
+    },
     { status: 201 },
   )
 }

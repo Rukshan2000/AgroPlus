@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Loader2 } from "lucide-react"
+import { Loader2, QrCode } from "lucide-react"
 import OutletSelectionModal from "./outlet-selection-modal"
+import { BarcodeLoginScanner } from "./barcode-login-scanner"
 
 export default function AuthForm({ mode = "login" }) {
   const isLogin = mode === "login"
@@ -19,6 +20,7 @@ export default function AuthForm({ mode = "login" }) {
   const [showOutletSelection, setShowOutletSelection] = useState(false)
   const [userOutlets, setUserOutlets] = useState([])
   const [userData, setUserData] = useState(null)
+  const [isBarcodeOpen, setIsBarcodeOpen] = useState(false)
   const [form, setForm] = useState({ 
     email: "", 
     password: "", 
@@ -98,17 +100,26 @@ export default function AuthForm({ mode = "login" }) {
   }
 
   function proceedWithRedirect(user) {
-    // Redirect based on user role
-    if (user && user.role === 'cashier') {
-      router.replace("/pos")
+    // Determine redirect based on role
+    if (user.role === 'cashier') {
+      router.push("/pos")
     } else {
-      router.replace("/dashboard")
+      router.push("/dashboard")
     }
   }
 
   function handleOutletSelected(outletId) {
     // Outlet is already stored in localStorage by the modal
     proceedWithRedirect(userData)
+  }
+
+  const handleBarcodeSuccess = (user) => {
+    setIsBarcodeOpen(false)
+    proceedWithRedirect(user)
+  }
+
+  const handleBarcodeError = (err) => {
+    setError(err.message || "Barcode login failed")
   }
 
   return (
@@ -222,6 +233,19 @@ export default function AuthForm({ mode = "login" }) {
                 isLogin ? "Sign In" : "Create Account"
               )}
             </Button>
+
+            {isLogin && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-11 text-base"
+                onClick={() => setIsBarcodeOpen(true)}
+              >
+                <QrCode className="mr-2 h-5 w-5" />
+                Login with Barcode
+              </Button>
+            )}
+
             <div className="text-sm text-center text-muted-foreground">
               {isLogin ? (
                 <span>
@@ -249,6 +273,13 @@ export default function AuthForm({ mode = "login" }) {
           onOutletSelected={handleOutletSelected}
         />
       )}
+
+      <BarcodeLoginScanner
+        isOpen={isBarcodeOpen}
+        onClose={() => setIsBarcodeOpen(false)}
+        onSuccess={handleBarcodeSuccess}
+        onError={handleBarcodeError}
+      />
     </>
   )
 }
