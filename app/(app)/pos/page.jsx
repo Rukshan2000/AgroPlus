@@ -83,6 +83,16 @@ export default function POSSystem() {
     }
   }, [session?.user])
 
+  // Focus quantity input when editing cart item
+  useEffect(() => {
+    if (selectedCartIndex !== null) {
+      setTimeout(() => {
+        const input = document.querySelector('.quantity-input')
+        if (input) input.focus()
+      }, 10)
+    }
+  }, [selectedCartIndex])
+
   // Format session time
   const formatSessionTime = (seconds) => {
     const hours = Math.floor(seconds / 3600)
@@ -1025,10 +1035,25 @@ export default function POSSystem() {
                   </div>
                   {selectedCartIndex === index && (
                     <div className="pt-2 border-t border-blue-700 text-center space-y-1">
-                      <div className="text-white font-bold text-lg bg-blue-950 p-2">
-                        {cartInputQty || '0'}
-                      </div>
-                      <div className="text-xs text-blue-300 font-bold">Use keypad numbers, then press ADD or ENT</div>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={cartInputQty}
+                        onChange={(e) => setCartInputQty(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            const newQty = parseFloat(cartInputQty) || 1
+                            if (newQty > 0) {
+                              updateQuantity(selectedCartIndex, newQty)
+                              setSelectedCartIndex(null)
+                              setCartInputQty('')
+                            }
+                          }
+                        }}
+                        className="quantity-input w-full text-center text-white font-bold text-lg bg-blue-950 p-2 border-2 border-blue-600 focus:border-blue-400 rounded-none"
+                        autoFocus
+                      />
+                      <div className="text-xs text-blue-300 font-bold">Type quantity and press Enter, or use keypad</div>
                     </div>
                   )}
                 </div>
