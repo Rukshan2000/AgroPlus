@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
-import { getSession } from "../../../../../lib/auth"
-import { findUserById } from "../../../../../models/userModel"
-import { generateBarcodePDF, generateQRCode } from "../../../../../lib/barcode.js"
+import { getSession } from "@/lib/auth"
+import { findUserById } from "@/models/userModel"
+import { generateBarcodePDF, generateQRCode } from "@/lib/barcode.js"
 
 export const dynamic = "force-dynamic"
 
