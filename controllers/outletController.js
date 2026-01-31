@@ -196,12 +196,8 @@ export async function remove(request) {
 }
 
 export async function getActive(request) {
-  const session = await getSession()
-  
-  if (!session) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+  // Note: This endpoint is public and doesn't require authentication
+  // as it may be needed for outlet selection in various parts of the app
   try {
     const outlets = await getActiveOutlets()
     return Response.json({ outlets })
