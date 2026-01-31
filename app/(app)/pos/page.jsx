@@ -39,6 +39,8 @@ export default function POSSystem() {
   const [saleId, setSaleId] = useState(null) // Store sale ID for receipt
   const [selectedProductIndex, setSelectedProductIndex] = useState(0) // For arrow key navigation
   const [selectedOutlet, setSelectedOutlet] = useState(null) // Store selected outlet
+  const [selectedCartIndex, setSelectedCartIndex] = useState(null) // For cart item quantity editing
+  const [cartInputQty, setCartInputQty] = useState('') // Temporary quantity input for selected cart item
   const { toast } = useToast()
   const { session } = useSession()
   const isCashier = session?.user?.role === 'cashier'
@@ -196,7 +198,7 @@ export default function POSSystem() {
       })
       // Focus back to product input
       setTimeout(() => {
-        document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
       }, 100)
       return
     }
@@ -208,8 +210,9 @@ export default function POSSystem() {
         variant: "destructive"
       })
       setProductId('')
+      setProductSearch('')
       setTimeout(() => {
-        document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
       }, 100)
       return
     }
@@ -321,12 +324,13 @@ export default function POSSystem() {
     }
 
     setProductId('')
+    setProductSearch('')
     setQuantity('1')
     // Don't clear discount automatically - let user keep it for multiple items
 
     // Auto-focus back to product input for next item
     setTimeout(() => {
-      document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
+      document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
     }, 100)
   }
 
@@ -367,6 +371,12 @@ export default function POSSystem() {
         ? { ...item, quantity: newQty, total: item.unitPrice * newQty }
         : item
     ))
+    
+    toast({
+      title: "Quantity updated",
+      description: `${item.name} × ${newQty}`,
+      duration: 800
+    })
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
@@ -771,806 +781,452 @@ export default function POSSystem() {
   }, [cart.length, productId, quantity, filteredProducts, selectedProductIndex, isCashier, initiatePayment, clearCart, addToCart, handleLogout])
   
   return (
-    <div className={isCashier ? "fixed inset-0 bg-gray-50 dark:bg-black z-50 overflow-auto" : "min-h-screen bg-gray-50 dark:bg-black"}>
-      {/* Compact Header */}
-      <div className="bg-white dark:bg-black border-b dark:border-gray-800 shadow-sm">
-        <div className="px-4 py-2 flex justify-between items-center">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            Point of Sale System
+    <div className={isCashier ? "fixed inset-0 bg-black z-50 overflow-hidden flex flex-col" : "min-h-screen bg-black flex flex-col"}>
+      {/* Header - Compact Terminal Style */}
+      <div className="bg-gray-950 border-b-2 border-gray-700">
+        <div className="px-3 py-2 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <h1 className="text-base font-bold text-white flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5 text-green-500" />
+              POS SYSTEM
+            </h1>
             {selectedOutlet && (
-              <span className="ml-2 text-sm font-normal bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 px-3 py-1 rounded-full border border-green-300 dark:border-green-700">
+              <span className="text-xs font-bold bg-green-600 text-white px-3 py-1 rounded border-2 border-green-400">
                 {localStorage.getItem('selectedOutletName') || `Outlet #${selectedOutlet}`}
               </span>
             )}
-          </h1>
+          </div>
           
-          <div className="flex items-center gap-4">
-            {/* Theme Toggle */}
-            <ThemeToggle />
-            
-            {/* Returns Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowReturnModal(true)}
-              className="flex items-center gap-2"
-            >
-              <Undo2 className="h-4 w-4" />
-              Returns
-            </Button>
-
-            {/* Print Products Button */}
-            <PrintProductsButton products={products} />
-
-            {/* Cash Drawer Button */}
-            <CashDrawerButton />
-
-            {/* Screen Size Changer */}
-            <ScreenSizeChanger />
-            
-            {/* Session Timer for Cashiers */}
+          <div className="flex items-center gap-2 text-xs">
             {isCashier && (
-              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <div className="text-sm">
-                  <span className="text-gray-600 dark:text-gray-300">Session:</span>
-                  <span className="ml-1 font-mono font-bold text-blue-800 dark:text-blue-200">
-                    {formatSessionTime(sessionTime)}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {session?.user?.name}
-                </div>
+              <div className="flex items-center gap-1 bg-gray-800 px-2 py-1 rounded border border-gray-600">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-gray-300">Session: <span className="font-mono font-bold text-green-400">{formatSessionTime(sessionTime)}</span></span>
               </div>
             )}
-            {/* Keyboard Shortcuts Help */}
-            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-2 hidden xl:flex flex-wrap gap-2">
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+Q</kbd> Product</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+↵</kbd> Sale</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+K</kbd> Clear</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+/</kbd> Search</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">←→↑↓</kbd> Navigate</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl++</kbd> Zoom In</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+−</kbd> Zoom Out</span>
-              {isCashier && <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+L</kbd> Logout</span>}
-            </div>
-            
-            {/* Logout button for cashier users */}
+            <PrintProductsButton products={products} />
+            <CashDrawerButton />
             {isCashier && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleLogout}
-                className="flex items-center gap-2"
+                className="h-7 px-2 text-xs"
               >
-                <LogOut className="h-4 w-4" />
-                Logout
+                <LogOut className="h-3 w-3" />
               </Button>
             )}
           </div>
         </div>
       </div>
 
-      <div className="p-4">
-        {/* Top Input Row - Quick Access */}
-        <div className="mb-4 bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
-          {/* Global Discount Indicator */}
-          {discount && parseFloat(discount) > 0 && (
-            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-                  <span className="font-semibold text-yellow-800 dark:text-yellow-200">
-                    Global Discount Active: {discount}% OFF
-                  </span>
-                </div>
-                <button
-                  onClick={() => setDiscount('')}
-                  className="text-yellow-800 dark:text-yellow-200 hover:text-yellow-900 dark:hover:text-yellow-100 font-bold"
-                >
-                  Clear ×
-                </button>
-              </div>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                All items added to cart will have this discount applied automatically.
-              </p>
-            </div>
-          )}
-          
-          <div className="grid grid-cols-12 gap-4 items-end">
-            {/* Product Search/Input - 4 columns */}
-            <div className="col-span-4">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center justify-between">
-                <span>Product ID/SKU/Name</span>
-                <kbd className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs font-mono">Ctrl+Q</kbd>
-              </label>
-              <input
-                type="text"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addToCart()}
-                className="w-full h-12 px-4 text-lg font-mono border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                placeholder="Scan or type product..."
-                autoFocus
-              />
-            </div>
+      {/* Main Content Area - Terminal Style */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Side - Products & Cart */}
+        <div className="flex-1 flex flex-col overflow-hidden border-r-2 border-gray-700">
+          {/* Product Input Section */}
+          <div className="bg-gray-900 border-b-2 border-gray-700 p-3">
+            <input
+              type="text"
+              value={productId}
+              onChange={(e) => {
+                setProductId(e.target.value)
+                setProductSearch(e.target.value)
+              }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  if (selectedCartIndex !== null) {
+                    // Apply quantity if cart item is selected
+                    const newQty = parseFloat(cartInputQty) || 1
+                    if (newQty > 0) {
+                      updateQuantity(selectedCartIndex, newQty)
+                      setSelectedCartIndex(null)
+                      setCartInputQty('')
+                    }
+                  } else if (cart.length > 0 && !productId) {
+                    // If cart has items and product field is empty, complete sale
+                    initiatePayment()
+                  } else if (productId) {
+                    // Add product
+                    addToCart()
+                  }
+                }
+              }}
+              className="w-full h-14 px-4 text-lg font-mono bg-gray-800 text-white border-2 border-gray-600 focus:border-green-500 focus:outline-none rounded-none"
+              placeholder="SCAN/TYPE PRODUCT..."
+              autoFocus
+            />
+          </div>
 
-            {/* Quantity - 2 columns */}
-            <div className="col-span-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                Quantity
-              </label>
-              <div className="flex">
+          {/* Product Grid */}
+          <div className="flex-1 overflow-y-auto bg-black p-2">
+            <div className="grid grid-cols-3 gap-1">
+              {filteredProducts.slice(0, 12).map((product, index) => (
                 <button
-                  onClick={() => setQuantity(Math.max(1, (parseFloat(quantity) || 1) - 1).toString())}
-                  className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
-                >
-                  <span className="text-lg font-bold">−</span>
-                </button>
-                <input
-                  type="number"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                  min="1"
-                  step="0.1"
-                />
-                <button
-                  onClick={() => setQuantity(((parseFloat(quantity) || 1) + 1).toString())}
-                  className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
-                >
-                  <span className="text-lg font-bold">+</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Discount - 2 columns */}
-            <div className="col-span-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                Global Discount % {discount && parseFloat(discount) > 0 && (
-                  <span className="text-green-600 dark:text-green-400 font-bold">
-                    (Active)
-                  </span>
-                )}
-              </label>
-              <div className="flex">
-                <input
-                  type="number"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  className={`flex-1 h-12 px-4 text-lg border rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100 ${
-                    discount && parseFloat(discount) > 0 
-                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
-                      : ''
+                  key={product.id}
+                  data-product-index={index}
+                  onClick={() => {
+                    setSelectedProductIndex(index)
+                    addProductToCart(product, null, true)
+                  }}
+                  className={`p-3 border-2 text-left transition-all rounded-none font-bold text-xs ${
+                    product.available_quantity > 0
+                      ? 'bg-gray-800 border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-white'
+                      : 'bg-gray-900 border-gray-700 text-gray-500 opacity-50'
                   }`}
-                  placeholder="0"
+                >
+                  <div className="font-bold text-white truncate">{product.name}</div>
+                  <div className="text-gray-400 text-xs mb-1">{product.sku}</div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-green-400 font-bold">LKR {getProductPrice(product).toFixed(2)}</span>
+                    <span className={`text-xs px-2 py-1 rounded-none font-bold ${
+                      product.available_quantity > 10 
+                        ? 'bg-green-700 text-white'
+                        : product.available_quantity > 0
+                        ? 'bg-yellow-700 text-white'
+                        : 'bg-red-700 text-white'
+                    }`}>
+                      {product.available_quantity}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Discount Section */}
+          <div className="bg-gray-900 border-t-2 border-gray-700 p-3 border-b-2 space-y-3">
+            <div className="text-white font-bold text-lg">DISCOUNTS</div>
+            <div className="space-y-3">
+              {/* Per-Item Discount */}
+              <div className="flex gap-2 items-center">
+                <label className="text-sm text-gray-300 w-20 font-bold">Item %:</label>
+                <input
+                  type="number"
                   min="0"
                   max="100"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  className="flex-1 h-10 px-3 text-base font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500"
+                  placeholder="0"
                 />
-                {discount && (
+                {discount && parseFloat(discount) > 0 && (
                   <button
                     onClick={() => setDiscount('')}
-                    className="h-12 px-3 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 text-gray-600 dark:text-gray-300 text-sm"
-                    title="Clear discount"
+                    className="w-10 h-10 bg-red-700 hover:bg-red-800 text-white rounded-none text-lg font-bold"
                   >
                     ×
                   </button>
                 )}
               </div>
-            </div>
-
-            {/* Add Button - 2 columns */}
-            <div className="col-span-2">
-              <button
-                onClick={addToCart}
-                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-lg transition-colors duration-150 focus:ring-2 focus:ring-green-500 flex items-center justify-center gap-2"
-              >
-                ADD TO CART
-                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs font-mono">↵</kbd>
-              </button>
-            </div>
-
-            {/* Quick Clear - 2 columns */}
-            <div className="col-span-2">
-              <button
-                onClick={clearCart}
-                disabled={cart.length === 0}
-                className="w-full h-12 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold text-lg rounded-lg transition-colors duration-150 flex items-center justify-center gap-2"
-              >
-                CLEAR CART
-                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+K</kbd>
-              </button>
-            </div>
-          </div>
-
-          {/* Product Preview */}
-          {productId && findProduct(productId) && (
-            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="font-semibold text-blue-900 dark:text-blue-100">
-                    {findProduct(productId).name}
-                  </span>
-                  <span className="ml-2 text-sm text-blue-700 dark:text-blue-300">
-                    (Outlet Stock: {findProduct(productId).available_quantity})
-                  </span>
-                </div>
-                <div className="text-right">
-                  {discount && parseFloat(discount) > 0 ? (
-                    <div>
-                      <span className="text-sm text-gray-500 dark:text-gray-300 line-through">
-                        LKR {getProductPrice(findProduct(productId)).toFixed(2)}
-                      </span>
-                      <span className="ml-2 font-bold text-lg text-green-600 dark:text-green-400">
-                        LKR {(getProductPrice(findProduct(productId)) * (1 - parseFloat(discount) / 100)).toFixed(2)}
-                      </span>
-                      <div className="text-xs text-green-600 dark:text-green-400">
-                        {discount}% OFF
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="font-bold text-lg text-blue-900 dark:text-blue-100">
-                      LKR {getProductPrice(findProduct(productId)).toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Main Content Area */}
-        <div className="grid grid-cols-12 gap-4">
-          {/* Product Grid - 8 columns */}
-          <div className="col-span-8">
-            <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4 h-fit">
-              <div className="mb-4 space-y-3">
-                {/* Search and Sort Controls */}
-                <div className="flex gap-3 items-center">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      className="w-full h-10 px-4 pr-16 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                      placeholder="Search products..."
-                    />
-                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs font-mono">
-                      Ctrl+/
-                    </kbd>
-                  </div>
-                  
-                  {/* Sort By Dropdown */}
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100 text-sm"
-                  >
-                    <option value="popularity">Popularity</option>
-                    <option value="name">Name</option>
-                    <option value="price">Price</option>
-                    <option value="stock">Stock</option>
-                    <option value="sku">SKU</option>
-                  </select>
-                  
-                  {/* Sort Order Toggle */}
+              {/* Bill Discount */}
+              <div className="flex gap-2 items-center">
+                <label className="text-sm text-gray-300 w-20 font-bold">Bill %:</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={billDiscount}
+                  onChange={(e) => setBillDiscount(e.target.value)}
+                  className="flex-1 h-10 px-3 text-base font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-orange-500"
+                  placeholder="0"
+                />
+                {billDiscount && parseFloat(billDiscount) > 0 && (
                   <button
-                    onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                    className="h-10 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                    title={`Sort ${sortOrder === 'desc' ? 'Ascending' : 'Descending'}`}
+                    onClick={() => setBillDiscount('')}
+                    className="w-10 h-10 bg-red-700 hover:bg-red-800 text-white rounded-none text-lg font-bold"
                   >
-                    {sortOrder === 'desc' ? (
-                      <>
-                        <span className="text-lg">↓</span>
-                        DESC
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-lg">↑</span>
-                        ASC
-                      </>
-                    )}
+                    ×
                   </button>
-                </div>
-                
-                {/* Sort Info */}
-                <div className="text-xs text-gray-600 dark:text-gray-300 flex justify-between items-center">
-                  <span>
-                    Showing {filteredProducts.length} products sorted by{' '}
-                    <span className="font-medium">
-                      {sortBy === 'popularity' ? 'Popularity' : 
-                       sortBy === 'name' ? 'Name' :
-                       sortBy === 'price' ? 'Price' :
-                       sortBy === 'stock' ? 'Stock' : 'SKU'}
-                    </span>
-                    {' '}({sortOrder === 'desc' ? 'High to Low' : 'Low to High'})
-                  </span>
-                  
-                  {/* Quick Sort Buttons */}
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => {setSortBy('popularity'); setSortOrder('desc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'popularity' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                      Hot
-                    </button>
-                    <button
-                      onClick={() => {setSortBy('price'); setSortOrder('asc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'price' && sortOrder === 'asc' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                      Cheap
-                    </button>
-                    <button
-                      onClick={() => {setSortBy('name'); setSortOrder('asc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'name' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                      A-Z
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-4 gap-3">
-                {filteredProducts.map((product, index) => {
-                  const isTopSeller = sortBy === 'popularity' && index < 3 && product.sold_quantity > 10;
-                  const isPopular = sortBy === 'popularity' && product.sold_quantity > 5;
-                  const isLowStock = product.available_quantity <= 5;
-                  const isExpensive = sortBy === 'price' && getProductPrice(product) > 50;
-                  
-                  return (
-                  <button
-                    key={product.id}
-                    data-product-index={index}
-                    onClick={async () => {
-                      // Update selected index on click
-                      setSelectedProductIndex(index)
-                      
-                      // Check if product is already in cart
-                      const existingItemIndex = cart.findIndex(item => item.id === product.id)
-                      const qty = parseInt(quantity) || 1
-                      const productPrice = getProductPrice(product)
-                      const discountPercent = parseFloat(discount) || 0
-                      const discountAmount = (productPrice * discountPercent) / 100
-                      const finalPrice = productPrice - discountAmount
-
-                      if (product.available_quantity <= 0) {
-                        toast({
-                          title: "Out of stock",
-                          description: `${product.name} is currently out of stock`,
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      // Check if product has price variations
-                      try {
-                        const res = await fetch(`/api/products/${product.id}/price-variations/active`)
-                        if (res.ok) {
-                          const data = await res.json()
-                          const variations = data.variations || []
-                          
-                          if (variations.length > 0) {
-                            // Show price variation modal
-                            setSelectedProductForVariation(product)
-                            setShowPriceVariationModal(true)
-                            return
-                          }
-                        }
-                      } catch (error) {
-                        console.error('Error checking price variations:', error)
-                      }
-
-                      // No price variations, proceed with normal flow
-                      addProductToCart(product, null, true)
-                    }}
-                    className={`p-3 hover:shadow-md rounded-lg border-2 text-left transition-all duration-150 transform hover:scale-105 relative ${
-                      // Keyboard navigation highlight
-                      index === selectedProductIndex
-                        ? 'ring-4 ring-blue-500 ring-offset-2 dark:ring-offset-black scale-105 shadow-xl'
-                        : ''
-                    } ${
-                      isTopSeller 
-                        ? 'bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-orange-300 dark:border-orange-700 shadow-md'
-                        : isPopular && sortBy === 'popularity'
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                        : isLowStock && sortBy === 'stock'
-                        ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'
-                        : isExpensive && sortBy === 'price'
-                        ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700'
-                        : 'bg-gray-50 dark:bg-black border-gray-200 dark:border-gray-600'
-                    } hover:bg-blue-50 dark:hover:bg-blue-900/20`}
-                  >
-                    {/* Dynamic Badge based on sort type */}
-                    {sortBy === 'popularity' && isTopSeller && (
-                      <div className="absolute -top-2 -right-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg">
-                        🔥 HOT
-                      </div>
-                    )}
-                    
-                    {sortBy === 'popularity' && product.sold_quantity > 0 && !isTopSeller && (
-                      <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                        {product.sold_quantity}
-                      </div>
-                    )}
-                    
-                    {sortBy === 'stock' && isLowStock && (
-                      <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">
-                        LOW
-                      </div>
-                    )}
-                    
-                    {sortBy === 'price' && isExpensive && (
-                      <div className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                        💎
-                      </div>
-                    )}
-                    
-                    {sortBy === 'name' && index < 3 && (
-                      <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                        #{index + 1}
-                      </div>
-                    )}
-                    
-                    <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-1 truncate" title={product.name}>
-                      {product.name}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-300 mb-1 font-mono">
-                      {product.sku}
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="text-left">
-                        {discount && parseFloat(discount) > 0 ? (
-                          <div>
-                            <span className="text-xs text-gray-500 dark:text-gray-300 line-through">
-                              LKR {getProductPrice(product).toFixed(2)}
-                            </span>
-                            <div className="font-bold text-green-600 dark:text-green-400">
-                              LKR {(getProductPrice(product) * (1 - parseFloat(discount) / 100)).toFixed(2)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="font-bold text-green-600 dark:text-green-400">
-                            LKR {getProductPrice(product).toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        {discount && parseFloat(discount) > 0 && (
-                          <div className="text-xs bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 px-1 py-0.5 rounded mb-1">
-                            {discount}% OFF
-                          </div>
-                        )}
-                        <span className={`text-xs px-2 py-1 rounded font-semibold ${
-                          product.available_quantity > 10 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                            : product.available_quantity > 0
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                        }`}>
-                          {product.available_quantity}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Cart & Checkout - 4 columns */}
-          <div className="col-span-4">
-            <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                Cart ({cart.length} items)
-              </h3>
-
-              {/* Quick Add Shopping Bags */}
-              <div className="mb-3 p-2 bg-orange-50 dark:bg-orange-900/10 rounded-lg border border-orange-200 dark:border-orange-800">
-                <div className="text-xs font-semibold text-orange-700 dark:text-orange-300 mb-2">
-                  Quick Add Bags
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Medium Bag Button */}
-                  <button
-                    onClick={() => {
-                      const mediumBag = products.find(p => 
-                        p.name.toLowerCase().includes('shopping bag medium')
-                      )
-                      
-                      if (!mediumBag) {
-                        toast({
-                          title: "Product not found",
-                          description: "Medium shopping bag not found",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      if (mediumBag.available_quantity <= 0) {
-                        toast({
-                          title: "Out of stock",
-                          description: "Medium bags out of stock",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      const existingItemIndex = cart.findIndex(item => item.id === mediumBag.id)
-                      const bagPrice = getProductPrice(mediumBag)
-                      
-                      if (existingItemIndex >= 0) {
-                        const existingItem = cart[existingItemIndex]
-                        const newQuantity = existingItem.quantity + 1
-                        
-                        if (newQuantity > mediumBag.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${mediumBag.available_quantity} bags available`,
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        setCart(prev => prev.map((item, index) => 
-                          index === existingItemIndex 
-                            ? { 
-                                ...item, 
-                                quantity: newQuantity, 
-                                total: parseFloat((bagPrice * newQuantity).toFixed(2))
-                              }
-                            : item
-                        ))
-
-                        toast({
-                          title: "Added",
-                          description: `Medium bag ×${newQuantity}`,
-                          duration: 800
-                        })
-                      } else {
-                        const cartItem = {
-                          id: mediumBag.id,
-                          sku: mediumBag.sku,
-                          name: mediumBag.name,
-                          originalPrice: bagPrice,
-                          quantity: 1,
-                          discount: 0,
-                          unitPrice: bagPrice,
-                          total: bagPrice,
-                          availableStock: mediumBag.available_quantity
-                        }
-
-                        setCart(prev => [...prev, cartItem])
-
-                        toast({
-                          title: "Added",
-                          description: "Medium bag ×1",
-                          duration: 800
-                        })
-                      }
-                    }}
-                    className="h-10 bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
-                    title="Add Medium Shopping Bag (LKR 3.00)"
-                  >
-                    <ShoppingCart className="h-3.5 w-3.5" />
-                    Medium (3.00)
-                  </button>
-
-                  {/* Large Bag Button */}
-                  <button
-                    onClick={() => {
-                      const largeBag = products.find(p => 
-                        p.name.toLowerCase().includes('shopping bag large')
-                      )
-                      
-                      if (!largeBag) {
-                        toast({
-                          title: "Product not found",
-                          description: "Large shopping bag not found",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      if (largeBag.available_quantity <= 0) {
-                        toast({
-                          title: "Out of stock",
-                          description: "Large bags out of stock",
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      const existingItemIndex = cart.findIndex(item => item.id === largeBag.id)
-                      const bagPrice = getProductPrice(largeBag)
-                      
-                      if (existingItemIndex >= 0) {
-                        const existingItem = cart[existingItemIndex]
-                        const newQuantity = existingItem.quantity + 1
-                        
-                        if (newQuantity > largeBag.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${largeBag.available_quantity} bags available`,
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        setCart(prev => prev.map((item, index) => 
-                          index === existingItemIndex 
-                            ? { 
-                                ...item, 
-                                quantity: newQuantity, 
-                                total: parseFloat((bagPrice * newQuantity).toFixed(2))
-                              }
-                            : item
-                        ))
-
-                        toast({
-                          title: "Added",
-                          description: `Large bag ×${newQuantity}`,
-                          duration: 800
-                        })
-                      } else {
-                        const cartItem = {
-                          id: largeBag.id,
-                          sku: largeBag.sku,
-                          name: largeBag.name,
-                          originalPrice: bagPrice,
-                          quantity: 1,
-                          discount: 0,
-                          unitPrice: bagPrice,
-                          total: bagPrice,
-                          availableStock: largeBag.available_quantity
-                        }
-
-                        setCart(prev => [...prev, cartItem])
-
-                        toast({
-                          title: "Added",
-                          description: "Large bag ×1",
-                          duration: 800
-                        })
-                      }
-                    }}
-                    className="h-10 bg-orange-600 hover:bg-orange-700 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-sm"
-                    title="Add Large Shopping Bag (LKR 5.00)"
-                  >
-                    <ShoppingCart className="h-3.5 w-3.5" />
-                    Large (5.00)
-                  </button>
-                </div>
-              </div>
-              {/* Cart Items */}
-              <div className="max-h-64 overflow-y-auto mb-4">
-                {cart.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-300">
-                    Cart is empty
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {cart.map((item, index) => (
-                      <div key={index} className="p-3 bg-gray-50 dark:bg-black rounded-lg border border-gray-200 dark:border-gray-600">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1">
-                            <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate" title={item.name}>
-                              {item.name}
-                            </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-300 font-mono">
-                              {item.sku} • LKR {item.unitPrice.toFixed(2)} each
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => removeFromCart(index)}
-                            className="ml-2 w-6 h-6 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold transition-colors"
-                          >
-                            ×
-                          </button>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <div className="flex">
-                            <button
-                              onClick={() => updateQuantity(index, Math.max(1, (parseFloat(item.quantity) || 1) - 1))}
-                              className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
-                            >
-                              <span className="text-lg font-bold">−</span>
-                            </button>
-                            <input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => updateQuantity(index, parseFloat(e.target.value) || 1)}
-                              className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                              min="0"
-                              max={item.availableStock}
-                              step="0.1"
-                            />
-                            <button
-                              onClick={() => updateQuantity(index, (parseFloat(item.quantity) || 1) + 1)}
-                              className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
-                            >
-                              <span className="text-lg font-bold">+</span>
-                            </button>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold text-green-600 dark:text-green-400">
-                              LKR {item.total.toFixed(2)}
-                            </div>
-                            {item.discount > 0 && (
-                              <div className="text-xs text-gray-500 dark:text-gray-300">
-                                {item.discount}% off
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 )}
               </div>
-
-              {/* Totals */}
-              {cart.length > 0 && (
-                <div className="border-t dark:border-gray-600 pt-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-lg">
-                      <span className="font-semibold">Subtotal:</span>
-                      <span className="font-bold">LKR {subtotal.toFixed(2)}</span>
-                    </div>
-                    
-                    {/* Bill Discount Input */}
-                    <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                      <label className="text-sm font-semibold text-orange-700 dark:text-orange-300 whitespace-nowrap">
-                        Bill Discount:
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={billDiscount}
-                        onChange={(e) => setBillDiscount(e.target.value)}
-                        placeholder="0"
-                        className="w-20 px-2 py-1 text-sm border border-orange-300 dark:border-orange-700 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-800"
-                      />
-                      <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">%</span>
-                      {billDiscountAmount > 0 && (
-                        <span className="ml-auto text-sm font-bold text-orange-600 dark:text-orange-400">
-                          -LKR {billDiscountAmount.toFixed(2)}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="border-t dark:border-gray-600 pt-2">
-                      <div className="flex justify-between text-2xl font-bold text-green-600 dark:text-green-400">
-                        <span>TOTAL:</span>
-                        <span>LKR {total.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-
+              {/* Quick Discount Buttons */}
+              <div className="grid grid-cols-4 gap-2">
+                {[5, 10, 15, 20].map((pct) => (
                   <button
-                    onClick={initiatePayment}
-                    disabled={isLoading}
-                    className="w-full mt-4 h-16 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold text-xl rounded-lg transition-all duration-150 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:shadow-none flex items-center justify-center gap-3"
+                    key={pct}
+                    onClick={() => setDiscount(pct.toString())}
+                    className="h-10 bg-yellow-700 hover:bg-yellow-800 text-white text-sm font-bold border-2 border-yellow-900 rounded-none"
                   >
-                    {isLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                        PROCESSING...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="h-6 w-6" />
-                        COMPLETE SALE (F2)
-                      </>
-                    )}
+                    {pct}%
                   </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="bg-gray-900 border-t-2 border-gray-700 p-2 grid grid-cols-3 gap-1">
+            <button
+              onClick={() => setShowReturnModal(true)}
+              className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-2 rounded-none border-2 border-red-900 text-sm"
+            >
+              RETURNS
+            </button>
+            <button
+              onClick={clearCart}
+              disabled={cart.length === 0}
+              className="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-bold py-2 px-2 rounded-none border-2 border-gray-800 text-sm"
+            >
+              CLEAR CART
+            </button>
+            <button
+              onClick={() => {
+                document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+              }}
+              className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-2 rounded-none border-2 border-blue-900 text-sm"
+            >
+              NEW ITEM
+            </button>
+          </div>
+        </div>
+
+        {/* Right Side - Cart & Keypad - Half Screen Width */}
+        <div className="w-7/16 flex flex-col bg-gray-900 border-r-2 border-gray-700">
+          {/* Cart Display - Enhanced Size */}
+          <div className="flex-1 overflow-y-auto bg-black p-2 border-b-2 border-gray-700">
+            <div className="text-white font-bold text-base mb-3">CART ({cart.length})</div>
+            <div className="space-y-2">
+              {cart.map((item, index) => (
+                <div 
+                  key={index} 
+                  onClick={() => {
+                    setSelectedCartIndex(index)
+                    setCartInputQty(item.quantity.toString())
+                  }}
+                  className={`border-2 p-3 rounded-none cursor-pointer transition-all ${
+                    selectedCartIndex === index
+                      ? 'bg-blue-900 border-blue-500 ring-2 ring-blue-400'
+                      : 'bg-gray-800 border-gray-700 hover:border-gray-500'
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-white text-sm truncate" title={item.name}>{item.name}</div>
+                      <div className="text-gray-400 text-sm font-mono">{item.sku}</div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeFromCart(index)
+                        if (selectedCartIndex === index) {
+                          setSelectedCartIndex(null)
+                          setCartInputQty('')
+                        }
+                      }}
+                      className="w-7 h-7 bg-red-700 hover:bg-red-800 text-white rounded-none flex items-center justify-center text-lg font-bold ml-2 flex-shrink-0"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center mb-2 text-sm font-bold">
+                    <span className="text-gray-300">{selectedCartIndex === index ? 'NEW QTY:' : `Qty: ${item.quantity}`}</span>
+                    <span className="text-green-400 text-base">LKR {item.total.toFixed(2)}</span>
+                  </div>
+                  {selectedCartIndex === index && (
+                    <div className="pt-2 border-t border-blue-700 text-center space-y-1">
+                      <div className="text-white font-bold text-lg bg-blue-950 p-2">
+                        {cartInputQty || '0'}
+                      </div>
+                      <div className="text-xs text-blue-300 font-bold">Use keypad numbers, then press ADD or ENT</div>
+                    </div>
+                  )}
                 </div>
+              ))}
+              {cart.length === 0 && (
+                <div className="text-center text-gray-500 py-8 text-sm">No items in cart</div>
               )}
             </div>
+          </div>
+
+          {/* Totals & Checkout - Enhanced Size */}
+          <div className="bg-black border-b-2 border-gray-700 p-3 space-y-2">
+            <div className="flex justify-between text-white font-bold text-base">
+              <span>SUBTOTAL:</span>
+              <span>LKR {subtotal.toFixed(2)}</span>
+            </div>
+            {discount && parseFloat(discount) > 0 && (
+              <div className="flex justify-between text-yellow-400 font-bold text-sm">
+                <span>Item Discount ({discount}%):</span>
+                <span>-LKR {((subtotal * parseFloat(discount)) / 100).toFixed(2)}</span>
+              </div>
+            )}
+            {billDiscountAmount > 0 && (
+              <div className="flex justify-between text-orange-400 font-bold text-base">
+                <span>Bill Discount ({billDiscount}%):</span>
+                <span>-LKR {billDiscountAmount.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="border-t border-gray-700 pt-2 flex justify-between text-green-400 font-bold text-2xl">
+              <span>TOTAL:</span>
+              <span>LKR {total.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Numeric Keypad - Smart Context */}
+          <div className="bg-gray-900 p-1 grid grid-cols-4 gap-1">
+            {['7', '8', '9', 'CLR'].map((btn) => (
+              <button
+                key={btn}
+                onClick={() => {
+                  if (selectedCartIndex !== null) {
+                    // Cart mode - enter quantity
+                    if (btn === 'CLR') {
+                      setCartInputQty('')
+                    } else {
+                      setCartInputQty(prev => prev + btn)
+                    }
+                  } else {
+                    // Product search mode
+                    if (btn === 'CLR') {
+                      setProductId('')
+                      setProductSearch('')
+                    } else {
+                      setProductId(prev => prev + btn)
+                      setProductSearch(prev => prev + btn)
+                    }
+                  }
+                }}
+                className={`${
+                  btn === 'CLR' 
+                    ? 'bg-red-700 hover:bg-red-800 border-red-900' 
+                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
+                } text-white font-bold py-3 px-2 rounded-none border-2 text-lg`}
+                title={selectedCartIndex !== null ? 'Clear quantity' : 'Clear product'}
+              >
+                {btn}
+              </button>
+            ))}
+            {['4', '5', '6', 'DEL'].map((btn) => (
+              <button
+                key={btn}
+                onClick={() => {
+                  if (selectedCartIndex !== null) {
+                    // Cart mode
+                    if (btn === 'DEL') {
+                      setCartInputQty(prev => prev.slice(0, -1))
+                    } else {
+                      setCartInputQty(prev => prev + btn)
+                    }
+                  } else {
+                    // Product search mode
+                    if (btn === 'DEL') {
+                      setProductId(prev => prev.slice(0, -1))
+                      setProductSearch(prev => prev.slice(0, -1))
+                    } else {
+                      setProductId(prev => prev + btn)
+                      setProductSearch(prev => prev + btn)
+                    }
+                  }
+                }}
+                className={`${
+                  btn === 'DEL' 
+                    ? 'bg-yellow-700 hover:bg-yellow-800 border-yellow-900' 
+                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
+                } text-white font-bold py-3 px-2 rounded-none border-2 text-lg`}
+                title={selectedCartIndex !== null ? 'Delete last digit' : 'Delete last char'}
+              >
+                {btn}
+              </button>
+            ))}
+            {['1', '2', '3', 'ADD'].map((btn) => (
+              <button
+                key={btn}
+                onClick={() => {
+                  if (btn === 'ADD') {
+                    if (selectedCartIndex !== null) {
+                      // Apply quantity change to cart item
+                      const newQty = parseFloat(cartInputQty) || 1
+                      if (newQty > 0) {
+                        updateQuantity(selectedCartIndex, newQty)
+                        setSelectedCartIndex(null)
+                        setCartInputQty('')
+                      }
+                    } else {
+                      // Add new product to cart
+                      addToCart()
+                    }
+                  } else {
+                    if (selectedCartIndex !== null) {
+                      setCartInputQty(prev => prev + btn)
+                    } else {
+                      setProductId(prev => prev + btn)
+                      setProductSearch(prev => prev + btn)
+                    }
+                  }
+                }}
+                className={`${
+                  btn === 'ADD' 
+                    ? 'bg-green-700 hover:bg-green-800 border-green-900' 
+                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
+                } text-white font-bold py-3 px-2 rounded-none border-2 text-lg`}
+                title={selectedCartIndex !== null ? (btn === 'ADD' ? 'Apply quantity' : 'Enter digit') : (btn === 'ADD' ? 'Add to cart' : 'Enter digit')}
+              >
+                {btn}
+              </button>
+            ))}
+            {['0', '00', 'ENT', 'ENT'].map((btn, btnIndex) => (
+              <button
+                key={btn + btnIndex}
+                onClick={() => {
+                  if (btn === 'ENT') {
+                    if (selectedCartIndex !== null) {
+                      // Apply quantity change and close selection
+                      const newQty = parseFloat(cartInputQty) || 1
+                      if (newQty > 0) {
+                        updateQuantity(selectedCartIndex, newQty)
+                        setSelectedCartIndex(null)
+                        setCartInputQty('')
+                      }
+                    } else if (cart.length > 0) {
+                      // Complete the sale
+                      initiatePayment()
+                    }
+                  } else if (btn === '00') {
+                    if (selectedCartIndex !== null) {
+                      setCartInputQty(prev => prev + '00')
+                    } else {
+                      setProductId(prev => prev + '00')
+                      setProductSearch(prev => prev + '00')
+                    }
+                  } else {
+                    if (selectedCartIndex !== null) {
+                      setCartInputQty(prev => prev + btn)
+                    } else {
+                      setProductId(prev => prev + btn)
+                      setProductSearch(prev => prev + btn)
+                    }
+                  }
+                }}
+                className={`${
+                  btn === 'ENT' 
+                    ? 'bg-green-600 hover:bg-green-700 border-green-800' 
+                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
+                } text-white font-bold py-3 px-2 rounded-none border-2 text-lg`}
+                title={btn === 'ENT' ? (selectedCartIndex !== null ? 'Apply quantity' : 'Complete sale') : 'Enter digit'}
+              >
+                {btn}
+              </button>
+            ))}
+          </div>
+
+          {/* Status Bar - Show selected item or ready to checkout */}
+          <div className="bg-black border-t-2 border-gray-700 p-2">
+            {selectedCartIndex !== null ? (
+              <div className="text-center space-y-1 py-1">
+                <div className="text-yellow-400 font-bold text-base">EDIT QUANTITY MODE</div>
+                <div className="text-xs text-yellow-300">Type numbers with keypad • Press ADD or ENT to apply</div>
+              </div>
+            ) : cart.length > 0 ? (
+              <div className="text-center space-y-1 py-1">
+                <div className="text-green-400 font-bold text-base">READY TO PAY</div>
+                <div className="text-xs text-green-300">Click item to edit qty • Press ENT to complete</div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 font-bold text-sm">
+                Scan product to start
+              </div>
+            )}
           </div>
         </div>
       </div>
