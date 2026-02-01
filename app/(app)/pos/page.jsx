@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ShoppingCart, CheckCircle, LogOut, Undo2 } from 'lucide-react'
+import { ShoppingCart, CheckCircle, LogOut, Undo2, Plus } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useSession } from '@/hooks/use-session'
 import ProductInput from '@/components/pos/ProductInput'
@@ -15,6 +15,7 @@ import InsufficientStockWarning from '@/components/pos/insufficient-stock-warnin
 import PrintProductsButton from '@/components/pos/print-products-button'
 import CashDrawerButton from '@/components/pos/cash-drawer-button'
 import VirtualKeyboard from '@/components/pos/virtual-keyboard'
+import { CustomerFormModal } from '@/components/customer-form-modal'
 import { Button } from '@/components/ui/button'
 import ThemeToggle from '@/components/theme-toggle'
 import ScreenSizeChanger from '@/components/pos/screen-size-changer'
@@ -47,6 +48,7 @@ export default function POSSystem() {
   const [stockWarningData, setStockWarningData] = useState(null) // Data for stock warning modal
   const [discountMode, setDiscountMode] = useState(null) // 'item' or 'bill' for discount editing via keyboard
   const [discountInputValue, setDiscountInputValue] = useState('') // Temporary discount value
+  const [showCustomerModal, setShowCustomerModal] = useState(false) // Show/hide create customer modal
   const { toast } = useToast()
   const { session } = useSession()
   const isCashier = session?.user?.role === 'cashier'
@@ -750,6 +752,10 @@ export default function POSSystem() {
     setIsLoading(true)
     try {
       const outletId = localStorage.getItem('selectedOutlet')
+      
+      // Calculate the actual total after points redemption
+      const actualTotal = total - (payment.points_value || 0)
+      
       const saleData = {
         items: cart.map(item => ({
           product_id: item.id,
@@ -765,13 +771,18 @@ export default function POSSystem() {
         subtotal,
         bill_discount_percentage: billDiscountPercent,
         bill_discount_amount: billDiscountAmount,
-        total,
+        total: actualTotal,
         payment_method: payment.method,
         amount_paid: payment.amount_paid,
         change_given: payment.change,
         cashier_id: session?.user?.id,
         cashier_name: session?.user?.name,
-        outlet_id: outletId ? parseInt(outletId) : null
+        outlet_id: outletId ? parseInt(outletId) : null,
+        // Loyalty points data
+        customer_id: payment.customer?.id || null,
+        points_redeemed: payment.points_redeemed || 0,
+        points_value: payment.points_value || 0,
+        points_earned: payment.points_earned || 0
       }
 
       const response = await fetch('/api/sales', {
@@ -787,10 +798,83 @@ export default function POSSystem() {
         // Set sale ID from API response - use first sale ID or generate one
         const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
         setSaleId(firstSaleId || `SALE-${Date.now()}`)
+        
+        // Debug log for loyalty points
+        console.log('Payment data received:', {
+          customer: payment.customer,
+          points_redeemed: payment.points_redeemed,
+          points_earned: payment.points_earned
+        })
+        
+        // Handle loyalty points - redeem and earn using dedicated loyalty-points API
+        if (payment.customer?.id) {
+          console.log('Processing loyalty points for customer:', payment.customer.id)
+          const csrfToken = await fetch('/api/auth/csrf').then(r => r.json()).then(d => d.csrfToken)
+          
+          // Redeem points first (if any)
+          if (payment.points_redeemed > 0) {
+            try {
+              const redeemResponse = await fetch(`/api/customers/${payment.customer.id}/loyalty-points`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-csrf-token': csrfToken
+                },
+                body: JSON.stringify({
+                  action: 'redeem',
+                  points: payment.points_redeemed,
+                  sale_id: firstSaleId,
+                  description: `Points payment for Sale #${firstSaleId || 'N/A'}`,
+                  payment_value: payment.points_value // LKR value of the points used
+                })
+              })
+              
+              if (!redeemResponse.ok) {
+                const error = await redeemResponse.json()
+                console.error('Failed to redeem points:', error)
+              } else {
+                console.log('Points redeemed successfully:', payment.points_redeemed)
+              }
+            } catch (redeemError) {
+              console.error('Error redeeming loyalty points:', redeemError)
+            }
+          }
+          
+          // Earn points from purchase
+          if (payment.points_earned > 0) {
+            try {
+              const earnResponse = await fetch(`/api/customers/${payment.customer.id}/loyalty-points`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-csrf-token': csrfToken
+                },
+                body: JSON.stringify({
+                  action: 'earn',
+                  points: payment.points_earned,
+                  sale_id: firstSaleId,
+                  description: `Earned from purchase - Sale #${firstSaleId || 'N/A'}`
+                })
+              })
+              
+              if (!earnResponse.ok) {
+                const error = await earnResponse.json()
+                console.error('Failed to earn points:', error)
+              } else {
+                console.log('Points earned successfully:', payment.points_earned)
+              }
+            } catch (earnError) {
+              console.error('Error earning loyalty points:', earnError)
+            }
+          }
+        }
+        
         setShowBill(true);
         toast({
           title: "Sale completed",
-          description: "Transaction processed successfully"
+          description: payment.customer 
+            ? `Transaction processed. ${payment.points_earned > 0 ? `Customer earned ${payment.points_earned} points.` : ''}`
+            : "Transaction processed successfully"
         });
         loadProducts(outletId);
       } else {
@@ -1010,6 +1094,14 @@ export default function POSSystem() {
             </button>
             <PrintProductsButton products={products} />
             <CashDrawerButton />
+            <button
+              onClick={() => setShowCustomerModal(true)}
+              className="h-7 px-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs border-2 border-blue-900 rounded-none"
+              title="Create new customer"
+            >
+              <Plus className="h-3 w-3 inline mr-1" />
+              CUSTOMER
+            </button>
             {isCashier && (
               <Button
                 variant="outline"
@@ -1421,6 +1513,24 @@ export default function POSSystem() {
         product={selectedProductForVariation}
         onVariationSelect={handleVariationSelect}
       />
+
+      {/* Create Customer Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-950 rounded-lg max-w-2xl w-full mx-4">
+            <CustomerFormModal
+              onSuccess={() => {
+                setShowCustomerModal(false)
+                toast({
+                  title: "Success",
+                  description: "Customer created successfully",
+                })
+              }}
+              onCancel={() => setShowCustomerModal(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Returns Modal */}
       <POSReturnModal
