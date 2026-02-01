@@ -78,19 +78,19 @@ function buildWhereClause(filters = {}, params = []) {
   let paramIndex = params.length + 1
   
   if (filters.category) {
-    conditions.push(`category = $${paramIndex}`)
+    conditions.push(`p.category = $${paramIndex}`)
     params.push(filters.category)
     paramIndex++
   }
   
   if (filters.search) {
-    conditions.push(`(name ILIKE $${paramIndex} OR description ILIKE $${paramIndex} OR sku ILIKE $${paramIndex})`)
+    conditions.push(`(p.name ILIKE $${paramIndex} OR p.description ILIKE $${paramIndex} OR p.sku ILIKE $${paramIndex})`)
     params.push(`%${filters.search}%`)
     paramIndex++
   }
   
   if (filters.is_active !== undefined) {
-    conditions.push(`is_active = $${paramIndex}`)
+    conditions.push(`p.is_active = $${paramIndex}`)
     params.push(filters.is_active)
     paramIndex++
   }
@@ -189,7 +189,7 @@ export async function listProducts({
   // Get total count
   const countResult = await query(`
     SELECT COUNT(*) as total
-    FROM products
+    FROM products p
     ${whereClause}
   `, whereParams)
   
