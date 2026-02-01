@@ -1,5 +1,6 @@
 import { createSale, listSales, getSalesStats, getDailySalesStats, getTopSellingProducts } from '../../../models/salesModel'
 import { findProductById } from '../../../models/productModel'
+import { deductDistributionQuantity } from '../../../models/productDistributeModel'
 import { query } from '../../../lib/db'
 import { getSession } from '../../../lib/auth'
 
@@ -85,6 +86,16 @@ export async function POST(request) {
             updated_at = NOW()
           WHERE id = $2
         `, [item.quantity, item.product_id])
+
+        // Deduct from product_distribute table if outlet_id is provided
+        if (outlet_id) {
+          try {
+            await deductDistributionQuantity(item.product_id, outlet_id, item.quantity)
+          } catch (distributionError) {
+            console.warn(`Warning: Could not deduct distribution quantity: ${distributionError.message}`)
+            // Don't fail the sale if distribution deduction fails
+          }
+        }
       }
 
       // Commit transaction

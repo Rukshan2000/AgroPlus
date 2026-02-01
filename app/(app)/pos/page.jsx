@@ -11,8 +11,10 @@ import ThermalReceipt from '@/components/pos/ThermalReceipt'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
 import POSReturnModal from '@/components/pos-return-modal'
 import PaymentModal from '@/components/pos/payment-modal'
+import InsufficientStockWarning from '@/components/pos/insufficient-stock-warning'
 import PrintProductsButton from '@/components/pos/print-products-button'
 import CashDrawerButton from '@/components/pos/cash-drawer-button'
+import VirtualKeyboard from '@/components/pos/virtual-keyboard'
 import { Button } from '@/components/ui/button'
 import ThemeToggle from '@/components/theme-toggle'
 import ScreenSizeChanger from '@/components/pos/screen-size-changer'
@@ -41,6 +43,10 @@ export default function POSSystem() {
   const [selectedOutlet, setSelectedOutlet] = useState(null) // Store selected outlet
   const [selectedCartIndex, setSelectedCartIndex] = useState(null) // For cart item quantity editing
   const [cartInputQty, setCartInputQty] = useState('') // Temporary quantity input for selected cart item
+  const [showStockWarning, setShowStockWarning] = useState(false) // Stock warning modal
+  const [stockWarningData, setStockWarningData] = useState(null) // Data for stock warning modal
+  const [discountMode, setDiscountMode] = useState(null) // 'item' or 'bill' for discount editing via keyboard
+  const [discountInputValue, setDiscountInputValue] = useState('') // Temporary discount value
   const { toast } = useToast()
   const { session } = useSession()
   const isCashier = session?.user?.role === 'cashier'
@@ -271,13 +277,19 @@ export default function POSSystem() {
       const newQuantity = existingItem.quantity + qty
       
       if (newQuantity > product.available_quantity) {
-        toast({
-          title: "Insufficient stock",
-          description: `Only ${product.available_quantity} units available. Current cart has ${existingItem.quantity}.`,
-          variant: "destructive"
+        // Show warning modal instead of just toast
+        setStockWarningData({
+          productName: product.name,
+          availableQuantity: product.available_quantity,
+          requestedQuantity: qty,
+          currentCartQuantity: existingItem.quantity,
+          product,
+          priceVariation,
+          isUpdating: true,
+          existingItemIndex
         })
-        setQuantity(Math.max(1, product.available_quantity - existingItem.quantity).toString())
-        return
+        setShowStockWarning(true)
+        return // Don't reset quantity, keep it for user review
       }
 
       // Update existing item quantity
@@ -298,16 +310,29 @@ export default function POSSystem() {
         description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
         duration: 1000
       })
+
+      // Reset inputs after successful add
+      setProductId('')
+      setProductSearch('')
+      setQuantity('1')
+      setTimeout(() => {
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+      }, 100)
     } else {
       // Product not in cart, add new item
       if (qty > product.available_quantity) {
-        toast({
-          title: "Insufficient stock",
-          description: `Only ${product.available_quantity} units available`,
-          variant: "destructive"
+        // Show warning modal instead of just toast
+        setStockWarningData({
+          productName: product.name,
+          availableQuantity: product.available_quantity,
+          requestedQuantity: qty,
+          currentCartQuantity: 0,
+          product,
+          priceVariation,
+          isUpdating: false
         })
-        setQuantity(product.available_quantity.toString())
-        return
+        setShowStockWarning(true)
+        return // Don't reset quantity, keep it for user review
       }
 
       const cartItem = {
@@ -331,17 +356,15 @@ export default function POSSystem() {
         description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} × ${qty}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
         duration: 1000
       })
+
+      // Reset inputs after successful add
+      setProductId('')
+      setProductSearch('')
+      setQuantity('1')
+      setTimeout(() => {
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+      }, 100)
     }
-
-    setProductId('')
-    setProductSearch('')
-    setQuantity('1')
-    // Don't clear discount automatically - let user keep it for multiple items
-
-    // Auto-focus back to product input for next item
-    setTimeout(() => {
-      document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
-    }, 100)
   }
 
   const handleVariationSelect = (variation) => {
@@ -349,6 +372,103 @@ export default function POSSystem() {
       addProductToCart(selectedProductForVariation, variation)
       setSelectedProductForVariation(null)
     }
+  }
+
+  const handleStockWarningConfirm = () => {
+    if (!stockWarningData) return
+
+    const { product, priceVariation, isUpdating, existingItemIndex, isCartEdit, cartIndex } = stockWarningData
+    const maxAvailable = Math.max(0, product.available_quantity - (stockWarningData.currentCartQuantity || 0))
+
+    // Handle cart item edit case (when user edits quantity from cart)
+    if (isCartEdit && cartIndex !== undefined) {
+      const item = cart[cartIndex]
+      setCart(prev => prev.map((cartItem, i) => 
+        i === cartIndex 
+          ? { ...cartItem, quantity: maxAvailable, total: cartItem.unitPrice * maxAvailable }
+          : cartItem
+      ))
+
+      toast({
+        title: "Quantity updated",
+        description: `${item.name} quantity set to ${maxAvailable} (Maximum available)`,
+        duration: 1000
+      })
+
+      setSelectedCartIndex(null)
+      setCartInputQty('')
+      setShowStockWarning(false)
+      setStockWarningData(null)
+      
+      setTimeout(() => {
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+      }, 100)
+      return
+    }
+    
+    // Set quantity to maximum available
+    setQuantity(maxAvailable.toString())
+
+    const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
+    const discountPercent = parseFloat(discount) || 0
+    const discountAmount = (productPrice * discountPercent) / 100
+    const finalPrice = productPrice - discountAmount
+
+    if (isUpdating && existingItemIndex !== undefined) {
+      // Update existing item
+      const newQuantity = stockWarningData.currentCartQuantity + maxAvailable
+      setCart(prev => prev.map((item, index) => 
+        index === existingItemIndex 
+          ? { 
+              ...item, 
+              quantity: newQuantity, 
+              total: finalPrice * newQuantity,
+              discount: discountPercent,
+              unitPrice: finalPrice
+            }
+          : item
+      ))
+
+      toast({
+        title: "Quantity updated",
+        description: `${product.name} quantity updated to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        duration: 1000
+      })
+    } else {
+      // Add new item with maximum available
+      const cartItem = {
+        id: product.id,
+        sku: product.sku,
+        name: product.name,
+        variationId: priceVariation?.id || null,
+        variationName: priceVariation?.variant_name || null,
+        originalPrice: productPrice,
+        quantity: maxAvailable,
+        discount: discountPercent,
+        unitPrice: finalPrice,
+        total: finalPrice * maxAvailable,
+        availableStock: product.available_quantity
+      }
+
+      setCart(prev => [...prev, cartItem])
+
+      toast({
+        title: "Added to cart",
+        description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} × ${maxAvailable} (Maximum available)${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        duration: 1000
+      })
+    }
+
+    setProductId('')
+    setProductSearch('')
+    setQuantity('1')
+    setShowStockWarning(false)
+    setStockWarningData(null)
+
+    // Auto-focus back to product input for next item
+    setTimeout(() => {
+      document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+    }, 100)
   }
 
   const removeFromCart = (index) => {
@@ -368,11 +488,22 @@ export default function POSSystem() {
 
     const item = cart[index]
     if (newQty > item.availableStock) {
-      toast({
-        title: "Insufficient stock",
-        description: `Only ${item.availableStock} units available`,
-        variant: "destructive"
+      // Show warning modal for cart quantity edit
+      setStockWarningData({
+        productName: item.name,
+        availableQuantity: item.availableStock,
+        requestedQuantity: newQty,
+        currentCartQuantity: 0, // Not adding to existing, replacing
+        product: { 
+          id: item.id, 
+          name: item.name, 
+          available_quantity: item.availableStock 
+        },
+        priceVariation: item.variationId ? { id: item.variationId, variant_name: item.variationName } : null,
+        isCartEdit: true, // Flag to indicate this is a cart edit
+        cartIndex: index
       })
+      setShowStockWarning(true)
       return
     }
     
@@ -814,6 +945,14 @@ export default function POSSystem() {
                 <span className="text-gray-300">Session: <span className="font-mono font-bold text-green-400">{formatSessionTime(sessionTime)}</span></span>
               </div>
             )}
+            <button
+              onClick={() => setShowReturnModal(true)}
+              className="h-7 px-2 bg-red-700 hover:bg-red-800 text-white font-bold text-xs border-2 border-red-900 rounded-none"
+              title="Process returns"
+            >
+              <Undo2 className="h-3 w-3 inline mr-1" />
+              RETURNS
+            </button>
             <PrintProductsButton products={products} />
             <CashDrawerButton />
             {isCashier && (
@@ -889,84 +1028,67 @@ export default function POSSystem() {
                   <div className="text-gray-400 text-xs mb-1">{product.sku}</div>
                   <div className="flex justify-between items-center">
                     <span className="text-green-400 font-bold">LKR {getProductPrice(product).toFixed(2)}</span>
-                    <span className={`text-xs px-2 py-1 rounded-none font-bold ${
-                      product.available_quantity > 10 
-                        ? 'bg-green-700 text-white'
-                        : product.available_quantity > 0
-                        ? 'bg-yellow-700 text-white'
-                        : 'bg-red-700 text-white'
-                    }`}>
-                      {product.available_quantity}
-                    </span>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={`text-xs px-2 py-1 rounded-none font-bold ${
+                        (product.outlet_available_quantity || product.available_quantity) > 10 
+                          ? 'bg-green-700 text-white'
+                          : (product.outlet_available_quantity || product.available_quantity) > 0
+                          ? 'bg-yellow-700 text-white'
+                          : 'bg-red-700 text-white'
+                      }`}>
+                        Stock: {product.outlet_available_quantity ?? product.available_quantity}
+                      </span>
+                      {product.total_available_quantity && (
+                        <span className="text-xs px-1 text-gray-400 truncate">
+                          WH: {product.total_available_quantity}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Discount Section */}
-          <div className="bg-gray-900 border-t-2 border-gray-700 p-3 border-b-2 space-y-3">
-            <div className="text-white font-bold text-lg">DISCOUNTS</div>
-            <div className="space-y-3">
-              {/* Per-Item Discount */}
-              <div className="flex gap-2 items-center">
-                <label className="text-sm text-gray-300 w-20 font-bold">Item %:</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  className="flex-1 h-10 px-3 text-base font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500"
-                  placeholder="0"
-                />
-                {discount && parseFloat(discount) > 0 && (
-                  <button
-                    onClick={() => setDiscount('')}
-                    className="w-10 h-10 bg-red-700 hover:bg-red-800 text-white rounded-none text-lg font-bold"
-                  >
-                    ×
-                  </button>
+          {/* Discount Section - Compact */}
+          <div className="bg-gray-900 border-t-2 border-gray-700 px-3 py-2 border-b-2">
+            <div className="flex items-center gap-4">
+              {/* Item Discount */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-yellow-400 font-bold">Item:</span>
+                {discountMode === 'item' ? (
+                  <input type="text" value={discountInputValue} readOnly className="w-16 h-9 px-2 text-sm font-bold bg-blue-950 text-white border-2 border-blue-600 rounded-none text-center" />
+                ) : (
+                  <input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500 rounded-none text-center" placeholder="0" />
                 )}
-              </div>
-              {/* Bill Discount */}
-              <div className="flex gap-2 items-center">
-                <label className="text-sm text-gray-300 w-20 font-bold">Bill %:</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={billDiscount}
-                  onChange={(e) => setBillDiscount(e.target.value)}
-                  className="flex-1 h-10 px-3 text-base font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-orange-500"
-                  placeholder="0"
-                />
-                {billDiscount && parseFloat(billDiscount) > 0 && (
-                  <button
-                    onClick={() => setBillDiscount('')}
-                    className="w-10 h-10 bg-red-700 hover:bg-red-800 text-white rounded-none text-lg font-bold"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              {/* Quick Discount Buttons */}
-              <div className="grid grid-cols-4 gap-2">
+                <span className="text-sm text-gray-400">%</span>
                 {[5, 10, 15, 20].map((pct) => (
-                  <button
-                    key={pct}
-                    onClick={() => setDiscount(pct.toString())}
-                    className="h-10 bg-yellow-700 hover:bg-yellow-800 text-white text-sm font-bold border-2 border-yellow-900 rounded-none"
-                  >
-                    {pct}%
-                  </button>
+                  <button key={`item-${pct}`} onClick={() => setDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${discount === pct.toString() ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-yellow-800 hover:bg-yellow-700 border-yellow-900 text-yellow-100'}`}>{pct}%</button>
                 ))}
+                {discount && parseFloat(discount) > 0 && <button onClick={() => setDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+              </div>
+              
+              <div className="w-px h-9 bg-gray-600"></div>
+              
+              {/* Bill Discount */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-orange-400 font-bold">Bill:</span>
+                {discountMode === 'bill' ? (
+                  <input type="text" value={discountInputValue} readOnly className="w-16 h-9 px-2 text-sm font-bold bg-blue-950 text-white border-2 border-blue-600 rounded-none text-center" />
+                ) : (
+                  <input type="number" min="0" max="100" value={billDiscount} onChange={(e) => setBillDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-orange-500 rounded-none text-center" placeholder="0" />
+                )}
+                <span className="text-sm text-gray-400">%</span>
+                {[5, 10, 15, 20].map((pct) => (
+                  <button key={`bill-${pct}`} onClick={() => setBillDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${billDiscount === pct.toString() ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-800 hover:bg-orange-700 border-orange-900 text-orange-100'}`}>{pct}%</button>
+                ))}
+                {billDiscount && parseFloat(billDiscount) > 0 && <button onClick={() => setBillDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
               </div>
             </div>
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-gray-900 border-t-2 border-gray-700 p-2 grid grid-cols-3 gap-1">
+          {/* <div className="bg-gray-900 border-t-2 border-gray-700 p-2 grid grid-cols-3 gap-1">
             <button
               onClick={() => setShowReturnModal(true)}
               className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-2 rounded-none border-2 border-red-900 text-sm"
@@ -988,7 +1110,7 @@ export default function POSSystem() {
             >
               NEW ITEM
             </button>
-          </div>
+          </div> */}
         </div>
 
         {/* Right Side - Cart & Keypad - Half Screen Width */}
@@ -1088,159 +1210,107 @@ export default function POSSystem() {
             </div>
           </div>
 
-          {/* Numeric Keypad - Smart Context */}
-          <div className="bg-gray-900 p-1 grid grid-cols-4 gap-1">
-            {['7', '8', '9', 'CLR'].map((btn) => (
-              <button
-                key={btn}
-                onClick={() => {
-                  if (selectedCartIndex !== null) {
-                    // Cart mode - enter quantity
-                    if (btn === 'CLR') {
-                      setCartInputQty('')
-                    } else {
-                      setCartInputQty(prev => prev + btn)
-                    }
-                  } else {
-                    // Product search mode
-                    if (btn === 'CLR') {
-                      setProductId('')
-                      setProductSearch('')
-                    } else {
-                      setProductId(prev => prev + btn)
-                      setProductSearch(prev => prev + btn)
-                    }
-                  }
-                }}
-                className={`${
-                  btn === 'CLR' 
-                    ? 'bg-red-700 hover:bg-red-800 border-red-900' 
-                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
-                } text-white font-bold py-3 px-2 rounded-none border-2 text-lg`}
-                title={selectedCartIndex !== null ? 'Clear quantity' : 'Clear product'}
-              >
-                {btn}
-              </button>
-            ))}
-            {['4', '5', '6', 'DEL'].map((btn) => (
-              <button
-                key={btn}
-                onClick={() => {
-                  if (selectedCartIndex !== null) {
-                    // Cart mode
-                    if (btn === 'DEL') {
-                      setCartInputQty(prev => prev.slice(0, -1))
-                    } else {
-                      setCartInputQty(prev => prev + btn)
-                    }
-                  } else {
-                    // Product search mode
-                    if (btn === 'DEL') {
-                      setProductId(prev => prev.slice(0, -1))
-                      setProductSearch(prev => prev.slice(0, -1))
-                    } else {
-                      setProductId(prev => prev + btn)
-                      setProductSearch(prev => prev + btn)
-                    }
-                  }
-                }}
-                className={`${
-                  btn === 'DEL' 
-                    ? 'bg-yellow-700 hover:bg-yellow-800 border-yellow-900' 
-                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
-                } text-white font-bold py-3 px-2 rounded-none border-2 text-lg`}
-                title={selectedCartIndex !== null ? 'Delete last digit' : 'Delete last char'}
-              >
-                {btn}
-              </button>
-            ))}
-            {['1', '2', '3', 'ADD'].map((btn) => (
-              <button
-                key={btn}
-                onClick={() => {
-                  if (btn === 'ADD') {
-                    if (selectedCartIndex !== null) {
-                      // Apply quantity change to cart item
-                      const newQty = parseFloat(cartInputQty) || 1
-                      if (newQty > 0) {
-                        updateQuantity(selectedCartIndex, newQty)
-                        setSelectedCartIndex(null)
-                        setCartInputQty('')
-                      }
-                    } else {
-                      // Add new product to cart
-                      addToCart()
-                    }
-                  } else {
-                    if (selectedCartIndex !== null) {
-                      setCartInputQty(prev => prev + btn)
-                    } else {
-                      setProductId(prev => prev + btn)
-                      setProductSearch(prev => prev + btn)
-                    }
-                  }
-                }}
-                className={`${
-                  btn === 'ADD' 
-                    ? 'bg-green-700 hover:bg-green-800 border-green-900' 
-                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
-                } text-white font-bold py-3 px-2 rounded-none border-2 text-lg`}
-                title={selectedCartIndex !== null ? (btn === 'ADD' ? 'Apply quantity' : 'Enter digit') : (btn === 'ADD' ? 'Add to cart' : 'Enter digit')}
-              >
-                {btn}
-              </button>
-            ))}
-            {['0', '00', 'ENT', 'ENT'].map((btn, btnIndex) => (
-              <button
-                key={btn + btnIndex}
-                onClick={() => {
-                  if (btn === 'ENT') {
-                    if (selectedCartIndex !== null) {
-                      // Apply quantity change and close selection
-                      const newQty = parseFloat(cartInputQty) || 1
-                      if (newQty > 0) {
-                        updateQuantity(selectedCartIndex, newQty)
-                        setSelectedCartIndex(null)
-                        setCartInputQty('')
-                      }
-                    } else if (cart.length > 0) {
-                      // Complete the sale
-                      initiatePayment()
-                    }
-                  } else if (btn === '00') {
-                    if (selectedCartIndex !== null) {
-                      setCartInputQty(prev => prev + '00')
-                    } else {
-                      setProductId(prev => prev + '00')
-                      setProductSearch(prev => prev + '00')
-                    }
-                  } else {
-                    if (selectedCartIndex !== null) {
-                      setCartInputQty(prev => prev + btn)
-                    } else {
-                      setProductId(prev => prev + btn)
-                      setProductSearch(prev => prev + btn)
-                    }
-                  }
-                }}
-                className={`${
-                  btn === 'ENT' 
-                    ? 'bg-green-600 hover:bg-green-700 border-green-800' 
-                    : 'bg-gray-800 hover:bg-gray-700 border-gray-700'
-                } text-white font-bold py-3 px-2 rounded-none border-2 text-lg`}
-                title={btn === 'ENT' ? (selectedCartIndex !== null ? 'Apply quantity' : 'Complete sale') : 'Enter digit'}
-              >
-                {btn}
-              </button>
-            ))}
-          </div>
+          {/* Virtual Keyboard */}
+          <VirtualKeyboard
+            isCartMode={selectedCartIndex !== null}
+            isDiscountMode={discountMode !== null}
+            discountModeType={discountMode}
+            onKeyPress={(key) => {
+              if (discountMode) {
+                // In discount mode, only accept numbers
+                if (!isNaN(key)) {
+                  setDiscountInputValue(prev => prev + key)
+                }
+              } else if (selectedCartIndex !== null) {
+                setCartInputQty(prev => prev + key)
+              } else {
+                setProductId(prev => prev + key)
+                setProductSearch(prev => prev + key)
+              }
+            }}
+            onDelete={() => {
+              if (discountMode) {
+                setDiscountInputValue(prev => prev.slice(0, -1))
+              } else if (selectedCartIndex !== null) {
+                setCartInputQty(prev => prev.slice(0, -1))
+              } else {
+                setProductId(prev => prev.slice(0, -1))
+                setProductSearch(prev => prev.slice(0, -1))
+              }
+            }}
+            onClear={() => {
+              if (discountMode) {
+                setDiscountInputValue('')
+              } else if (selectedCartIndex !== null) {
+                setCartInputQty('')
+              } else {
+                setProductId('')
+                setProductSearch('')
+              }
+            }}
+            onClearCart={clearCart}
+            onAdd={() => {
+              if (discountMode) {
+                // Apply discount
+                const discountValue = parseFloat(discountInputValue) || 0
+                if (discountMode === 'item') {
+                  setDiscount(discountValue.toString())
+                  toast({
+                    title: "Item Discount Applied",
+                    description: `${discountValue}% discount set`,
+                    duration: 800
+                  })
+                } else if (discountMode === 'bill') {
+                  setBillDiscount(discountValue.toString())
+                  toast({
+                    title: "Bill Discount Applied",
+                    description: `${discountValue}% discount set`,
+                    duration: 800
+                  })
+                }
+                setDiscountMode(null)
+                setDiscountInputValue('')
+              } else if (selectedCartIndex !== null) {
+                const newQty = parseFloat(cartInputQty) || 1
+                if (newQty > 0) {
+                  updateQuantity(selectedCartIndex, newQty)
+                  setSelectedCartIndex(null)
+                  setCartInputQty('')
+                }
+              } else {
+                addToCart()
+              }
+            }}
+            onEnter={() => {
+              if (discountMode) {
+                // Apply discount and close
+                const discountValue = parseFloat(discountInputValue) || 0
+                if (discountMode === 'item') {
+                  setDiscount(discountValue.toString())
+                } else if (discountMode === 'bill') {
+                  setBillDiscount(discountValue.toString())
+                }
+                setDiscountMode(null)
+                setDiscountInputValue('')
+              } else if (selectedCartIndex !== null) {
+                const newQty = parseFloat(cartInputQty) || 1
+                if (newQty > 0) {
+                  updateQuantity(selectedCartIndex, newQty)
+                  setSelectedCartIndex(null)
+                  setCartInputQty('')
+                }
+              } else if (cart.length > 0) {
+                initiatePayment()
+              }
+            }}
+          />
 
           {/* Status Bar - Show selected item or ready to checkout */}
           <div className="bg-black border-t-2 border-gray-700 p-2">
             {selectedCartIndex !== null ? (
               <div className="text-center space-y-1 py-1">
                 <div className="text-yellow-400 font-bold text-base">EDIT QUANTITY MODE</div>
-                <div className="text-xs text-yellow-300">Type numbers with keypad • Press ADD or ENT to apply</div>
+                <div className="text-xs text-yellow-300">Use keyboard to type • Press ADD or ENT to apply</div>
               </div>
             ) : cart.length > 0 ? (
               <div className="text-center space-y-1 py-1">
@@ -1302,6 +1372,22 @@ export default function POSSystem() {
         isOpen={showReturnModal}
         onClose={() => setShowReturnModal(false)}
         onSuccess={handleReturnSuccess}
+      />
+
+      {/* Insufficient Stock Warning Modal */}
+      <InsufficientStockWarning
+        isOpen={showStockWarning}
+        onClose={() => {
+          setShowStockWarning(false)
+          setStockWarningData(null)
+          setSelectedCartIndex(null)
+          setCartInputQty('')
+        }}
+        onConfirm={handleStockWarningConfirm}
+        productName={stockWarningData?.productName}
+        availableQuantity={stockWarningData?.availableQuantity}
+        requestedQuantity={stockWarningData?.requestedQuantity}
+        currentCartQuantity={stockWarningData?.currentCartQuantity}
       />
     </div>
   )

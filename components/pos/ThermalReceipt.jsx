@@ -72,7 +72,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>Time:</span>
-          <span>{currentDate.toLocaleTimeString()}</span>
+          <span suppressHydrationWarning>{currentDate.toLocaleTimeString()}</span>
         </div>
       </div>
 

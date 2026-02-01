@@ -31,13 +31,18 @@ export async function GET(request) {
       }, { status: 200 })
     }
 
-    // Create a map of product_id to distributed quantity
+    // Create a map of product_id to distribution data (including available_quantity)
     const distributionMap = {}
     distributions.forEach(dist => {
       if (distributionMap[dist.product_id]) {
-        distributionMap[dist.product_id] += parseFloat(dist.quantity_distributed)
+        // Sum quantities if multiple distributions
+        distributionMap[dist.product_id].quantity_distributed += parseFloat(dist.quantity_distributed)
+        distributionMap[dist.product_id].available_quantity += parseFloat(dist.available_quantity || dist.quantity_distributed)
       } else {
-        distributionMap[dist.product_id] = parseFloat(dist.quantity_distributed)
+        distributionMap[dist.product_id] = {
+          quantity_distributed: parseFloat(dist.quantity_distributed),
+          available_quantity: parseFloat(dist.available_quantity || dist.quantity_distributed)
+        }
       }
     })
 
@@ -54,11 +59,14 @@ export async function GET(request) {
       .filter(p => p !== null && (is_active ? p.is_active : true))
       .map(product => ({
         ...product,
-        // Override available_quantity with outlet-specific distributed quantity
-        available_quantity: distributionMap[product.id] || 0,
-        // Keep original quantity for reference if needed
+        // Show the actual available quantity at this outlet from product_distribute table
+        available_quantity: distributionMap[product.id]?.available_quantity || 0,
+        // Outlet available quantity (same as above, for clarity)
+        outlet_available_quantity: distributionMap[product.id]?.available_quantity || 0,
+        // Keep original warehouse quantity for reference
         total_available_quantity: product.available_quantity,
-        outlet_distributed_quantity: distributionMap[product.id] || 0
+        // Keep distributed quantity info
+        outlet_distributed_quantity: distributionMap[product.id]?.quantity_distributed || 0
       }))
       .slice(0, limit)
 

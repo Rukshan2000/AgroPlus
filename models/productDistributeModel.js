@@ -18,10 +18,19 @@ export async function createDistribution({
 }) {
   const result = await query(`
     INSERT INTO product_distribute 
-    (product_id, outlet_id, quantity_distributed, distributed_by, notes)
-    VALUES ($1, $2, $3, $4, $5)
+    (product_id, outlet_id, quantity_distributed, available_quantity, distributed_by, notes)
+    VALUES ($1, $2, $3, $3, $4, $5)
     RETURNING *
   `, [product_id, outlet_id, quantity_distributed, distributed_by, notes])
+  
+  // Update product available_quantity by adding the distributed quantity
+  if (result.rows[0]) {
+    await query(`
+      UPDATE products 
+      SET available_quantity = available_quantity + $1
+      WHERE id = $2
+    `, [quantity_distributed, product_id])
+  }
   
   return result.rows[0] || null
 }
@@ -238,6 +247,7 @@ export async function findDistributionsByOutlet(outlet_id, options = {}) {
       p.sku,
       pd.outlet_id,
       pd.quantity_distributed,
+      pd.available_quantity,
       pd.distributed_by,
       pd.distribution_date,
       pd.notes,
@@ -258,7 +268,17 @@ export async function findDistributionsByOutlet(outlet_id, options = {}) {
  * @returns {Object} Updated distribution record
  */
 export async function updateDistribution(id, updateData) {
-  const allowed = ['quantity_distributed', 'notes', 'is_active']
+  // First, get the current distribution record to check quantity changes
+  const currentResult = await query(`
+    SELECT * FROM product_distribute WHERE id = $1
+  `, [id])
+  
+  if (!currentResult.rows[0]) return null
+  
+  const currentDistribution = currentResult.rows[0]
+  const quantityDifference = (updateData.quantity_distributed || currentDistribution.quantity_distributed) - currentDistribution.quantity_distributed
+  
+  const allowed = ['quantity_distributed', 'available_quantity', 'notes', 'is_active']
   const updates = []
   const params = []
   let paramIndex = 1
@@ -283,6 +303,15 @@ export async function updateDistribution(id, updateData) {
     RETURNING *
   `, params)
 
+  // Update product available_quantity if quantity_distributed changed
+  if (result.rows[0] && quantityDifference !== 0) {
+    await query(`
+      UPDATE products 
+      SET available_quantity = available_quantity + $1
+      WHERE id = $2
+    `, [quantityDifference, currentDistribution.product_id])
+  }
+
   return result.rows[0] || null
 }
 
@@ -292,12 +321,30 @@ export async function updateDistribution(id, updateData) {
  * @returns {boolean} Success status
  */
 export async function deleteDistribution(id) {
+  // First, get the distribution record to get product_id and quantity
+  const getResult = await query(`
+    SELECT product_id, quantity_distributed FROM product_distribute WHERE id = $1
+  `, [id])
+  
+  if (!getResult.rows[0]) return false
+  
+  const { product_id, quantity_distributed } = getResult.rows[0]
+  
   const result = await query(`
     UPDATE product_distribute
     SET is_active = false, updated_at = CURRENT_TIMESTAMP
     WHERE id = $1
     RETURNING id
   `, [id])
+
+  // Reverse the available_quantity when distribution is deleted
+  if (result.rows.length > 0) {
+    await query(`
+      UPDATE products 
+      SET available_quantity = available_quantity - $1
+      WHERE id = $2
+    `, [quantity_distributed, product_id])
+  }
 
   return result.rows.length > 0
 }
@@ -399,4 +446,41 @@ export async function bulkCreateDistributions(distributions) {
 
   const result = await query(query_str, params)
   return result.rows
+}
+
+/**
+ * Deduct quantity from product distribution for a specific outlet
+ * @param {number} product_id - Product ID
+ * @param {number} outlet_id - Outlet ID
+ * @param {number} quantity - Quantity to deduct
+ * @returns {Object} Updated distribution record
+ */
+export async function deductDistributionQuantity(product_id, outlet_id, quantity) {
+  // First check if the distribution exists and has enough quantity
+  const checkResult = await query(`
+    SELECT id, available_quantity FROM product_distribute
+    WHERE product_id = $1 AND outlet_id = $2 AND is_active = true
+    LIMIT 1
+  `, [product_id, outlet_id])
+
+  if (!checkResult.rows[0]) {
+    throw new Error(`No active distribution found for product ${product_id} at outlet ${outlet_id}`)
+  }
+
+  const distribution = checkResult.rows[0]
+  if (distribution.available_quantity < quantity) {
+    throw new Error(`Insufficient available quantity. Available: ${distribution.available_quantity}, Requested: ${quantity}`)
+  }
+
+  // Deduct the quantity
+  const result = await query(`
+    UPDATE product_distribute
+    SET 
+      available_quantity = available_quantity - $1,
+      updated_at = NOW()
+    WHERE product_id = $2 AND outlet_id = $3 AND is_active = true
+    RETURNING *
+  `, [quantity, product_id, outlet_id])
+
+  return result.rows[0] || null
 }
