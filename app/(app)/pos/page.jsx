@@ -138,11 +138,27 @@ export default function POSSystem() {
         url = '/api/products?limit=100&is_active=true'
       }
 
-      const response = await fetch(url)
+      console.log('Loading products from:', url)
+      const response = await fetch(url, { credentials: 'include' })
+      
       if (response.ok) {
         const data = await response.json()
         setProducts(data.products || [])
       } else {
+        // Log the error response for debugging
+        const errorText = await response.text()
+        console.error('Products API error:', response.status, errorText)
+        
+        // If distributed endpoint fails, fallback to regular products
+        if (outletId) {
+          console.log('Falling back to regular products API')
+          const fallbackResponse = await fetch('/api/products?limit=100&is_active=true', { credentials: 'include' })
+          if (fallbackResponse.ok) {
+            const data = await fallbackResponse.json()
+            setProducts(data.products || [])
+            return
+          }
+        }
         throw new Error('Failed to fetch products')
       }
     } catch (error) {
@@ -154,7 +170,7 @@ export default function POSSystem() {
       })
       // Fallback to all products on error
       try {
-        const response = await fetch('/api/products?limit=100&is_active=true')
+        const response = await fetch('/api/products?limit=100&is_active=true', { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
           setProducts(data.products || [])
@@ -761,8 +777,14 @@ export default function POSSystem() {
 
   // Handle return success - reload products
   const handleReturnSuccess = () => {
-    const outletId = localStorage.getItem('selectedOutlet')
-    loadProducts(outletId)
+    // Get outlet from localStorage or state
+    const outletId = localStorage.getItem('selectedOutlet') || selectedOutlet
+    console.log('handleReturnSuccess - reloading products for outlet:', outletId)
+    if (outletId) {
+      loadProducts(outletId)
+    } else {
+      loadProducts(null)
+    }
     toast({
       title: "Return Processed",
       description: "Inventory has been updated",

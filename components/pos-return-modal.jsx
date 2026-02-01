@@ -156,6 +156,7 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
         body: JSON.stringify({
           sale_id: selectedSale.id,
           product_id: selectedSale.product_id,
+          outlet_id: selectedSale.outlet_id, // Include outlet_id to update product_distribution
           quantity_returned: parseFloat(formData.quantity_returned),
           return_reason: formData.return_reason,
           restocked: formData.restocked,
@@ -170,7 +171,7 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
 
       toast({
         title: "Return Processed",
-        description: `Successfully processed return. Refund: LKR ${data.refund_amount.toFixed(2)}`,
+        description: `Successfully processed return. Refund: LKR ${data.refund_amount.toFixed(2)}${formData.restocked ? ' • Inventory updated' : ''}`,
       });
 
       onSuccess?.();

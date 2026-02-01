@@ -12,7 +12,7 @@ import { getSaleById } from '../models/salesModel.js';
  * Process a product return
  */
 export async function processReturn(data, userId) {
-  const { sale_id, product_id, quantity_returned, return_reason, restocked = true } = data;
+  const { sale_id, product_id, outlet_id, quantity_returned, return_reason, restocked = true } = data;
 
   // Validate input
   if (!sale_id || !product_id || !quantity_returned) {
@@ -42,6 +42,9 @@ export async function processReturn(data, userId) {
   // Calculate refund amount (proportional to quantity)
   const refund_amount = (eligibility.sale.total_amount / eligibility.sale.quantity) * qty;
 
+  // Get outlet_id from sale if not provided
+  const finalOutletId = outlet_id || eligibility.sale.outlet_id;
+
   // Create the return with outlet_id from the original sale
   const returnRecord = await createReturn({
     sale_id,
@@ -53,7 +56,7 @@ export async function processReturn(data, userId) {
     refund_amount,
     restocked,
     processed_by: userId,
-    outlet_id: eligibility.sale.outlet_id
+    outlet_id: finalOutletId
   });
 
   return {

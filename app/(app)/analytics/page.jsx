@@ -35,6 +35,7 @@ export default function AnalyticsPage() {
   const [topProducts, setTopProducts] = useState([])
   const [topCustomers, setTopCustomers] = useState([])
   const [returnAnalytics, setReturnAnalytics] = useState(null)
+  const [outletPerformance, setOutletPerformance] = useState(null)
 
   useEffect(() => {
     loadOutlets()
@@ -68,9 +69,11 @@ export default function AnalyticsPage() {
         fetch(`/api/sales?stats=true${selectedOutlet ? `&outlet_id=${selectedOutlet}` : ''}`),
         // Return analytics
         fetch(`/api/returns?stats=true&days=30${selectedOutlet ? `&outlet_id=${selectedOutlet}` : ''}`),
+        // Product distribution for outlet performance
+        fetch(`/api/product-distribution${selectedOutlet ? `?outlet_id=${selectedOutlet}` : '?limit=1000'}`),
       ]
 
-      const [metricsRes, returnsRes] = await Promise.all(promises)
+      const [metricsRes, returnsRes, distRes] = await Promise.all(promises)
 
       if (metricsRes.ok) {
         const data = await metricsRes.json()
@@ -83,6 +86,39 @@ export default function AnalyticsPage() {
       if (returnsRes.ok) {
         const data = await returnsRes.json()
         setReturnAnalytics(data)
+      }
+
+      if (distRes.ok) {
+        const data = await distRes.json()
+        // Process distribution data for outlet performance
+        const distributions = data.distributions || []
+        
+        // Group by outlet and calculate metrics
+        const outletMetrics = {}
+        distributions.forEach(dist => {
+          const outletId = dist.outlet_id
+          if (!outletMetrics[outletId]) {
+            const outlet = outlets.find(o => o.id === outletId)
+            outletMetrics[outletId] = {
+              id: outletId,
+              name: outlet?.name || `Outlet ${outletId}`,
+              total_available: 0,
+              total_value: 0,
+              product_count: 0
+            }
+          }
+          const product = data.products?.find(p => p.id === dist.product_id)
+          if (product) {
+            outletMetrics[outletId].total_available += dist.available_quantity || 0
+            outletMetrics[outletId].total_value += ((dist.available_quantity || 0) * parseFloat(product.price || 0))
+            outletMetrics[outletId].product_count += 1
+          }
+        })
+        
+        const performanceData = Object.values(outletMetrics)
+          .sort((a, b) => b.total_value - a.total_value)
+        
+        setOutletPerformance(performanceData)
       }
     } catch (error) {
       toast({
@@ -316,6 +352,60 @@ export default function AnalyticsPage() {
                   <Package className="h-8 w-8 text-purple-500" />
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Outlet Performance by Stock */}
+      {!loading && outletPerformance && outletPerformance.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Outlet Stock Performance
+            </CardTitle>
+            <CardDescription>Available inventory value and stock levels by outlet</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {outletPerformance.map((outlet) => {
+                const maxValue = outletPerformance[0]?.total_value || 1
+                const valuePercentage = (outlet.total_value / maxValue) * 100
+                return (
+                  <div key={outlet.id} className="border rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="font-bold text-lg">{outlet.name}</h3>
+                        <p className="text-sm text-muted-foreground">{outlet.product_count} products distributed</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-blue-600">LKR {outlet.total_value.toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground">Total Stock Value</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-blue-600 h-full rounded-full transition-all duration-300" 
+                          style={{width: `${valuePercentage}%`}}
+                        />
+                      </div>
+                      <p className="text-sm font-medium w-16 text-right">{valuePercentage.toFixed(0)}%</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Total Units</p>
+                        <p className="font-bold text-lg">{outlet.total_available.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Avg Value/Product</p>
+                        <p className="font-bold text-lg">LKR {(outlet.total_value / outlet.product_count).toFixed(2)}</p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </CardContent>
         </Card>

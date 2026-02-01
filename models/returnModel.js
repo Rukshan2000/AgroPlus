@@ -47,6 +47,17 @@ export async function createReturn({
           updated_at = NOW()
         WHERE id = $2
       `, [qty, product_id]);
+
+      // Update product_distribute available_quantity if outlet_id is available
+      if (outlet_id) {
+        await query(`
+          UPDATE product_distribute 
+          SET 
+            available_quantity = available_quantity + $1,
+            updated_at = NOW()
+          WHERE product_id = $2 AND outlet_id = $3
+        `, [qty, product_id, outlet_id]);
+      }
     }
 
     // Get the sale item details to update profit
