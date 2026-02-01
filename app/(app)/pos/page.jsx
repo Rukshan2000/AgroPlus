@@ -390,6 +390,39 @@ export default function POSSystem() {
     }
   }
 
+  // Handle product click from grid - check for price variations first
+  const handleProductClick = async (product) => {
+    if (product.available_quantity <= 0) {
+      toast({
+        title: "Out of stock",
+        description: `${product.name} is currently out of stock`,
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Check if product has price variations
+    try {
+      const res = await fetch(`/api/products/${product.id}/price-variations/active`)
+      if (res.ok) {
+        const data = await res.json()
+        const variations = data.variations || []
+        
+        if (variations.length > 0) {
+          // Show price variation modal
+          setSelectedProductForVariation(product)
+          setShowPriceVariationModal(true)
+          return
+        }
+      }
+    } catch (error) {
+      console.error('Error checking price variations:', error)
+    }
+
+    // No price variations, proceed with normal flow
+    addProductToCart(product, null)
+  }
+
   const handleStockWarningConfirm = () => {
     if (!stockWarningData) return
 
@@ -1038,7 +1071,7 @@ export default function POSSystem() {
                   data-product-index={index}
                   onClick={() => {
                     setSelectedProductIndex(index)
-                    addProductToCart(product, null, true)
+                    handleProductClick(product)
                   }}
                   className={`p-3 border-2 text-left transition-all rounded-none font-bold text-xs ${
                     product.available_quantity > 0
