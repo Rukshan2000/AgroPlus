@@ -20,80 +20,148 @@ export default function BarcodeSticker({ isOpen, onClose, product }) {
 
   if (!product) return null
 
+  // Use SKU as barcode value, fallback to product ID
+  const barcodeValue = product.sku || `P-${product.id}`
+
   const handlePrint = () => {
     setIsGenerating(true)
-    setTimeout(() => {
-      window.print()
+    try {
+      // Create a temp canvas with JsBarcode for printing
+      const tempCanvas = document.createElement('canvas')
+      try {
+        JsBarcode(tempCanvas, barcodeValue, {
+          format: 'CODE128',
+          width: 2,
+          height: 80,
+          displayValue: true,
+          fontSize: 14,
+          font: 'monospace',
+          textMargin: 6,
+          margin: 10,
+          background: '#ffffff',
+          lineColor: '#000000'
+        })
+      } catch (err) {
+        console.error('Error generating barcode:', err)
+        setIsGenerating(false)
+        return
+      }
+
+      const barcodeDataUrl = tempCanvas.toDataURL('image/png')
+
+      const printWindow = window.open('', '_blank', 'width=400,height=300')
+      if (!printWindow) {
+        alert('Please allow popups for printing')
+        setIsGenerating(false)
+        return
+      }
+
+      const productName = product.name.length > 30 ? product.name.substring(0, 30) + '...' : product.name
+      const priceText = product.price ? `LKR ${parseFloat(product.price).toFixed(2)}` : ''
+
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Barcode - ${product.name}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            @page { size: 2in 1in; margin: 0; }
+            body {
+              width: 2in;
+              height: 1in;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              font-family: Arial, sans-serif;
+              background: white;
+            }
+            img { max-width: 1.8in; height: auto; }
+            .name { font-size: 8pt; font-weight: bold; margin-top: 2px; text-align: center; }
+            .price { font-size: 8pt; font-weight: bold; text-align: center; }
+          </style>
+        </head>
+        <body>
+          <img src="${barcodeDataUrl}" />
+          <div class="name">${productName}</div>
+          ${priceText ? `<div class="price">${priceText}</div>` : ''}
+        </body>
+        </html>
+      `)
+      printWindow.document.close()
+      printWindow.onload = () => {
+        printWindow.focus()
+        printWindow.print()
+        printWindow.close()
+      }
+    } catch (error) {
+      console.error('Print error:', error)
+    } finally {
       setIsGenerating(false)
-    }, 100)
+    }
   }
 
   const handleDownload = () => {
     setIsGenerating(true)
     try {
-      // Create a temporary canvas for the barcode with proper resolution
+      // Create a temporary canvas for the barcode
       const tempCanvas = document.createElement('canvas')
-      const tempCtx = tempCanvas.getContext('2d')
       
-      // Generate barcode at high resolution
-      tempCanvas.width = 800
-      tempCanvas.height = 200
-      tempCtx.fillStyle = 'white'
-      tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height)
-      
-      // Use jsbarcode to draw directly on canvas
-      const paddedId = product.id.toString().padStart(12, '0')
-      
+      // Use JsBarcode to draw CODE128 barcode on canvas
       try {
-        JsBarcode(tempCanvas, paddedId, {
-          format: 'EAN13',
-          width: 2.5,
-          height: 100,
+        JsBarcode(tempCanvas, barcodeValue, {
+          format: 'CODE128',
+          width: 2,
+          height: 80,
           displayValue: true,
-          fontSize: 16,
-          margin: 10
+          fontSize: 14,
+          font: 'monospace',
+          textMargin: 6,
+          margin: 10,
+          background: '#ffffff',
+          lineColor: '#000000'
         })
       } catch (err) {
         console.error('Error generating barcode:', err)
+        setIsGenerating(false)
+        return
       }
       
-      // Create final high-res canvas for download
+      // Create final high-res canvas for download (2" x 1" at 300 DPI)
       const printCanvas = document.createElement('canvas')
       const ctx = printCanvas.getContext('2d')
       
-      // Set canvas size for standard barcode sticker (2" x 1" at 300 DPI)
-      printCanvas.width = 600  // 2 inches * 300 DPI
-      printCanvas.height = 300 // 1 inch * 300 DPI
+      printCanvas.width = 600
+      printCanvas.height = 300
       
       // White background
       ctx.fillStyle = 'white'
       ctx.fillRect(0, 0, printCanvas.width, printCanvas.height)
       
       // Draw barcode centered
-      const barcodeWidth = 540  // Leave small margins
-      const barcodeHeight = 150
+      const barcodeWidth = 540
+      const barcodeHeight = 160
       const barcodeX = (printCanvas.width - barcodeWidth) / 2
-      const barcodeY = 20
+      const barcodeY = 15
       
       ctx.drawImage(tempCanvas, barcodeX, barcodeY, barcodeWidth, barcodeHeight)
       
-      // Add barcode number below barcode
+      // Add product name below barcode
       ctx.fillStyle = 'black'
       ctx.textAlign = 'center'
       
-      // Product name
-      const maxNameLength = 25
+      const maxNameLength = 30
       const productName = product.name.length > maxNameLength 
         ? product.name.substring(0, maxNameLength) + '...' 
         : product.name
-      ctx.font = 'bold 14px Arial'
-      ctx.fillText(productName, printCanvas.width / 2, barcodeY + barcodeHeight + 20)
+      ctx.font = 'bold 16px Arial'
+      ctx.fillText(productName, printCanvas.width / 2, barcodeY + barcodeHeight + 25)
       
-      // SKU if available (very small)
-      if (product.sku) {
-        ctx.font = '12px Arial'
-        ctx.fillStyle = '#666666'
-        ctx.fillText(`SKU: ${product.sku}`, printCanvas.width / 2, barcodeY + barcodeHeight + 38)
+      // Price
+      if (product.price) {
+        ctx.font = 'bold 18px Arial'
+        ctx.fillText(`LKR ${parseFloat(product.price).toFixed(2)}`, printCanvas.width / 2, barcodeY + barcodeHeight + 50)
       }
       
       // Convert to blob and download
@@ -101,7 +169,7 @@ export default function BarcodeSticker({ isOpen, onClose, product }) {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `barcode-${product.id}-${product.name.replace(/[^a-zA-Z0-9]/g, '_')}.png`
+        a.download = `barcode-${barcodeValue.replace(/[^a-zA-Z0-9-]/g, '_')}.png`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -128,29 +196,28 @@ export default function BarcodeSticker({ isOpen, onClose, product }) {
           
           <div className="flex justify-center py-4">
             <Card className="w-full max-w-sm bg-white">
-              <CardContent className="p-8 text-center bg-white">
+              <CardContent className="p-6 text-center bg-white">
                 <div id="barcode-canvas" className="mb-2">
                   <Barcode
-                    value={product.id.toString().padStart(12, '0')}
-                    format="EAN13"
-                    width={1.8}
+                    value={barcodeValue}
+                    format="CODE128"
+                    width={1.5}
                     height={50}
-                    fontSize={10}
-                    textMargin={5}
-                    margin={0}
+                    fontSize={12}
+                    font="monospace"
+                    textMargin={4}
+                    margin={5}
                     background="white"
                     lineColor="black"
+                    displayValue={true}
                   />
                 </div>
-                <div className="text-sm font-mono mt-2 tracking-wider">
-                  {product.id.toString().padStart(12, '0')}
+                <div className="text-sm font-medium mt-2">
+                  {product.name}
                 </div>
-                <div className="text-xs text-gray-600 mt-1 font-medium">
-                  {product.name.length > 20 ? product.name.substring(0, 20) + '...' : product.name}
-                </div>
-                {product.sku && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    SKU: {product.sku}
+                {product.price && (
+                  <div className="text-sm font-bold text-primary mt-1">
+                    LKR {parseFloat(product.price).toFixed(2)}
                   </div>
                 )}
               </CardContent>
@@ -176,49 +243,6 @@ export default function BarcodeSticker({ isOpen, onClose, product }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Print-only styles */}
-      <style jsx global>{`
-        @media print {
-          * {
-            visibility: hidden;
-          }
-          
-          #barcode-canvas,
-          #barcode-canvas * {
-            visibility: visible;
-          }
-          
-          #barcode-canvas {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: white;
-            padding: 0.05in;
-          }
-          
-          body {
-            margin: 0;
-            padding: 0;
-          }
-          
-          /* Standard barcode sticker roll size: 2" x 1" */
-          @page {
-            size: 2in 1in;
-            margin: 0;
-          }
-          
-          /* Alternative sizes for different sticker rolls */
-          @page :first {
-            size: 2in 1in; /* Most common barcode sticker size */
-          }
-        }
-      `}</style>
     </>
   )
 }

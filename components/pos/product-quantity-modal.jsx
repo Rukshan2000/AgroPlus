@@ -26,7 +26,6 @@ export default function ProductQuantityModal({
   const [selectedVariation, setSelectedVariation] = useState(null)
   const [quantity, setQuantity] = useState(1)
   const [loading, setLoading] = useState(false)
-  const [showNumpad, setShowNumpad] = useState(false)
   const [numpadValue, setNumpadValue] = useState('')
 
   useEffect(() => {
@@ -35,7 +34,6 @@ export default function ProductQuantityModal({
       setVariations([])
       setSelectedVariation(null)
       setQuantity(1) // Reset quantity when modal opens
-      setShowNumpad(false) // Reset numpad state
       setNumpadValue('') // Reset numpad value
       fetchVariations()
     }
@@ -128,7 +126,6 @@ export default function ProductQuantityModal({
   const handleClose = () => {
     setSelectedVariation(null)
     setQuantity(1)
-    setShowNumpad(false)
     setNumpadValue('')
     onClose()
   }
@@ -153,15 +150,7 @@ export default function ProductQuantityModal({
   }
 
   const handleInputFocus = () => {
-    setShowNumpad(true)
     setNumpadValue(quantity.toString())
-  }
-
-  const handlePopupClick = (e) => {
-    // Hide numpad when clicking anywhere in the popup except the input
-    if (!e.target.closest('#quantity') && !e.target.closest('.numpad-container')) {
-      setShowNumpad(false)
-    }
   }
 
   const hasVariations = variations.length > 0
@@ -170,7 +159,7 @@ export default function ProductQuantityModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className={`${showNumpad ? 'max-w-4xl' : 'max-w-md'} transition-all duration-200`} onClick={handlePopupClick}>
+      <DialogContent className="max-w-[700px] w-full transition-all duration-200">
         <button
           type="button"
           onClick={handleClose}
@@ -181,9 +170,9 @@ export default function ProductQuantityModal({
           </svg>
           <span className="sr-only">Close</span>
         </button>
-        <div className="flex">
+        <div className="flex gap-6">
           {/* Main Content */}
-          <div className="flex-1 min-w-[400px]">
+          <div className="flex-1">
             <DialogHeader className="pr-8">
               <DialogTitle>Add to Cart</DialogTitle>
               <DialogDescription>
@@ -343,23 +332,21 @@ export default function ProductQuantityModal({
             </DialogFooter>
           </div>
 
-          {/* Numpad - only shown when input is focused */}
-          {showNumpad && (
-            <div className="numpad-container border-l border-gray-700 pl-4 ml-4 flex flex-col justify-center min-w-[200px]">
-              <div className="grid grid-cols-3 gap-2">
-                {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '.'].map((key, index) => (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => handleNumpadClick(key)}
-                    className="h-14 w-14 border-2 border-gray-600 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-bold text-xl transition-colors"
-                  >
-                    {key}
-                  </button>
-                ))}
-              </div>
+          {/* Numpad */}
+          <div className="numpad-container border-l border-gray-700 pl-6 flex flex-col justify-center">
+            <div className="grid grid-cols-3 gap-2">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '.'].map((key, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => handleNumpadClick(key)}
+                  className="h-12 w-12 border-2 border-gray-600 rounded-lg bg-gray-800 hover:bg-gray-700 text-white font-bold text-lg transition-colors"
+                >
+                  {key}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

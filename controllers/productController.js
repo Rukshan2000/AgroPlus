@@ -478,36 +478,41 @@ export async function importCsv(request) {
       const rowNum = i + 2 // +2 because CSV has header row and is 1-indexed
 
       try {
-        // Parse price variations from flat columns (variant_1_name, variant_1_price, etc.)
+        // Parse price variations from flat columns (variant_1_name, variant_1_price, etc.) if they exist
         const priceVariations = []
         
-        for (let varNum = 1; varNum <= 5; varNum++) {
-          const variantName = product[`variant_${varNum}_name`]?.trim()
-          const variantPrice = product[`variant_${varNum}_price`]
-          
-          // If variant name exists, create the variation
-          if (variantName) {
-            const variation = {
-              variant_name: variantName,
-              price: parseFloat(variantPrice) || 0,
-              buying_price: parseFloat(product[`variant_${varNum}_buying_price`]) || 0,
-              stock_quantity: parseInt(product[`variant_${varNum}_stock`]) || 0,
-              sku_suffix: product[`variant_${varNum}_sku_suffix`]?.trim() || null,
-              description: null,
-              sort_order: varNum - 1,
-              is_default: (product[`variant_${varNum}_is_default`]?.toLowerCase() === 'yes' || 
-                          product[`variant_${varNum}_is_default`]?.toLowerCase() === 'true' ||
-                          product[`variant_${varNum}_is_default`] === '1'),
-              is_active: true
-            }
-            
-            priceVariations.push(variation)
-          }
-        }
+        // Check if CSV has variation columns
+        const hasVariationColumns = Object.keys(product).some(key => key.startsWith('variant_'))
         
-        // If no variations have is_default set, make the first one default
-        if (priceVariations.length > 0 && !priceVariations.some(v => v.is_default)) {
-          priceVariations[0].is_default = true
+        if (hasVariationColumns) {
+          for (let varNum = 1; varNum <= 5; varNum++) {
+            const variantName = product[`variant_${varNum}_name`]?.trim()
+            const variantPrice = product[`variant_${varNum}_price`]
+            
+            // If variant name exists, create the variation
+            if (variantName) {
+              const variation = {
+                variant_name: variantName,
+                price: parseFloat(variantPrice) || 0,
+                buying_price: parseFloat(product[`variant_${varNum}_buying_price`]) || 0,
+                stock_quantity: parseInt(product[`variant_${varNum}_stock`]) || 0,
+                sku_suffix: product[`variant_${varNum}_sku_suffix`]?.trim() || null,
+                description: null,
+                sort_order: varNum - 1,
+                is_default: (product[`variant_${varNum}_is_default`]?.toLowerCase() === 'yes' || 
+                            product[`variant_${varNum}_is_default`]?.toLowerCase() === 'true' ||
+                            product[`variant_${varNum}_is_default`] === '1'),
+                is_active: true
+              }
+              
+              priceVariations.push(variation)
+            }
+          }
+          
+          // If no variations have is_default set, make the first one default
+          if (priceVariations.length > 0 && !priceVariations.some(v => v.is_default)) {
+            priceVariations[0].is_default = true
+          }
         }
 
         const parsed = productSchema.safeParse({
