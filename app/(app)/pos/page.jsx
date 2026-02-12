@@ -9,6 +9,7 @@ import Cart from '@/components/pos/Cart'
 import Receipt from '@/components/pos/Receipt'
 import ThermalReceipt from '@/components/pos/ThermalReceipt'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
+import ProductQuantityModal from '@/components/pos/product-quantity-modal'
 import POSReturnModal from '@/components/pos-return-modal'
 import PaymentModal from '@/components/pos/payment-modal'
 import InsufficientStockWarning from '@/components/pos/insufficient-stock-warning'
@@ -38,6 +39,8 @@ export default function POSSystem() {
   const [sessionTime, setSessionTime] = useState(0) // Timer state
   const [showPriceVariationModal, setShowPriceVariationModal] = useState(false)
   const [selectedProductForVariation, setSelectedProductForVariation] = useState(null)
+  const [showProductQuantityModal, setShowProductQuantityModal] = useState(false)
+  const [selectedProductForQuantity, setSelectedProductForQuantity] = useState(null)
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [saleId, setSaleId] = useState(null) // Store sale ID for receipt
   const [selectedProductIndex, setSelectedProductIndex] = useState(0) // For arrow key navigation
@@ -392,7 +395,103 @@ export default function POSSystem() {
     }
   }
 
-  // Handle product click from grid - check for price variations first
+  // Handle adding product to cart from quantity modal
+  const handleQuantityModalAddToCart = (product, priceVariation, quantity) => {
+    // Check if product is already in cart (with same variation if applicable)
+    const variationKey = priceVariation ? `${product.id}-${priceVariation.id}` : product.id
+    const existingItemIndex = cart.findIndex(item => {
+      if (priceVariation) {
+        return item.id === product.id && item.variationId === priceVariation.id
+      }
+      return item.id === product.id && !item.variationId
+    })
+
+    const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
+    const discountPercent = parseFloat(discount) || 0
+    const discountAmount = (productPrice * discountPercent) / 100
+    const finalPrice = productPrice - discountAmount
+
+    if (existingItemIndex >= 0) {
+      // Product already in cart, increase quantity
+      const existingItem = cart[existingItemIndex]
+      const newQuantity = existingItem.quantity + quantity
+
+      if (newQuantity > product.available_quantity) {
+        // Show warning modal instead of just toast
+        setStockWarningData({
+          productName: product.name,
+          availableQuantity: product.available_quantity,
+          requestedQuantity: quantity,
+          currentCartQuantity: existingItem.quantity,
+          product,
+          priceVariation,
+          isUpdating: true,
+          existingItemIndex
+        })
+        setShowStockWarning(true)
+        return // Don't reset quantity, keep it for user review
+      }
+
+      // Update existing item quantity
+      setCart(prev => prev.map((item, index) =>
+        index === existingItemIndex
+          ? {
+              ...item,
+              quantity: newQuantity,
+              total: finalPrice * newQuantity,
+              discount: discountPercent, // Update discount if changed
+              unitPrice: finalPrice // Update unit price if discount changed
+            }
+          : item
+      ))
+
+      toast({
+        title: "Quantity updated",
+        description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        duration: 1000
+      })
+    } else {
+      // Product not in cart, add new item
+      if (quantity > product.available_quantity) {
+        // Show warning modal instead of just toast
+        setStockWarningData({
+          productName: product.name,
+          availableQuantity: product.available_quantity,
+          requestedQuantity: quantity,
+          currentCartQuantity: 0,
+          product,
+          priceVariation,
+          isUpdating: false
+        })
+        setShowStockWarning(true)
+        return // Don't reset quantity, keep it for user review
+      }
+
+      const cartItem = {
+        id: product.id,
+        sku: product.sku,
+        name: product.name,
+        variationId: priceVariation?.id || null,
+        variationName: priceVariation?.variant_name || null,
+        originalPrice: productPrice,
+        quantity: quantity,
+        discount: discountPercent,
+        unitPrice: finalPrice,
+        total: finalPrice * quantity,
+        availableStock: product.available_quantity
+      }
+
+      setCart(prev => [...prev, cartItem])
+
+      toast({
+        title: "Added to cart",
+        description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} × ${quantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        duration: 1000
+      })
+    }
+  }
+
+  // Handle product click from grid - show quantity modal
   const handleProductClick = async (product) => {
     if (product.available_quantity <= 0) {
       toast({
@@ -403,26 +502,9 @@ export default function POSSystem() {
       return
     }
 
-    // Check if product has price variations
-    try {
-      const res = await fetch(`/api/products/${product.id}/price-variations/active`)
-      if (res.ok) {
-        const data = await res.json()
-        const variations = data.variations || []
-        
-        if (variations.length > 0) {
-          // Show price variation modal
-          setSelectedProductForVariation(product)
-          setShowPriceVariationModal(true)
-          return
-        }
-      }
-    } catch (error) {
-      console.error('Error checking price variations:', error)
-    }
-
-    // No price variations, proceed with normal flow
-    addProductToCart(product, null)
+    // Show quantity modal for all products
+    setSelectedProductForQuantity(product)
+    setShowProductQuantityModal(true)
   }
 
   const handleStockWarningConfirm = () => {
@@ -1512,6 +1594,18 @@ export default function POSSystem() {
         }}
         product={selectedProductForVariation}
         onVariationSelect={handleVariationSelect}
+      />
+
+      {/* Product Quantity Modal */}
+      <ProductQuantityModal
+        isOpen={showProductQuantityModal}
+        onClose={() => {
+          setShowProductQuantityModal(false)
+          setSelectedProductForQuantity(null)
+        }}
+        product={selectedProductForQuantity}
+        onAddToCart={handleQuantityModalAddToCart}
+        productPrice={selectedProductForQuantity ? getProductPrice(selectedProductForQuantity) : 0}
       />
 
       {/* Create Customer Modal */}
