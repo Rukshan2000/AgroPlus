@@ -26,6 +26,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 
+const MAX_OUTLETS = parseInt(process.env.NEXT_PUBLIC_MAX_OUTLETS || "10")
+
 export default function OutletsTable({ initialOutlets = [] }) {
   const [outlets, setOutlets] = useState(initialOutlets)
   const [search, setSearch] = useState("")
@@ -136,11 +138,21 @@ export default function OutletsTable({ initialOutlets = [] }) {
     <>
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Outlets Management
-          </CardTitle>
-          <Button onClick={handleAddClick} className="gap-2">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Outlets Management
+            </CardTitle>
+            {total >= MAX_OUTLETS && (
+              <p className="text-sm text-red-500 mt-2">Maximum {MAX_OUTLETS} outlets reached</p>
+            )}
+          </div>
+          <Button 
+            onClick={handleAddClick} 
+            className="gap-2"
+            disabled={total >= MAX_OUTLETS}
+            title={total >= MAX_OUTLETS ? `Maximum ${MAX_OUTLETS} outlets allowed` : "Add new outlet"}
+          >
             <Plus className="h-4 w-4" />
             Add Outlet
           </Button>

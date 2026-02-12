@@ -120,8 +120,8 @@ function NavMenu({ role }) {
       key: "main",
       label: "Main",
       items: [
-        { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "user"] },
-        { href: "/analytics", label: "Analytics", icon: Activity, roles: ["admin", "manager", "user"] },
+        { id: "dashboard", href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "manager", "user"] },
+        { id: "analytics", href: "/analytics", label: "Analytics", icon: Activity, roles: ["admin", "manager", "user"] },
         // { href: "/", label: "Home", icon: Home, roles: ["admin", "manager", "user"] },
       ]
     },
@@ -131,9 +131,9 @@ function NavMenu({ role }) {
       icon: ShoppingCart,
       collapsible: true,
       items: [
-        { href: "/pos", label: "POS System", icon: ShoppingCart, roles: ["admin", "manager", "user", "cashier"] },
-        { href: "/sales", label: "Sales History", icon: BarChart3, roles: ["admin", "manager", "user"] },
-        { href: "/returns", label: "Returns", icon: Undo2, roles: ["admin", "manager", "user", "cashier"] },
+        { id: "pos", href: "/pos", label: "POS System", icon: ShoppingCart, roles: ["admin", "manager", "user", "cashier"] },
+        { id: "sales", href: "/sales", label: "Sales History", icon: BarChart3, roles: ["admin", "manager", "user"] },
+        { id: "returns", href: "/returns", label: "Returns", icon: Undo2, roles: ["admin", "manager", "user", "cashier"] },
       ]
     },
     {
@@ -142,10 +142,10 @@ function NavMenu({ role }) {
       icon: Package,
       collapsible: true,
       items: [
-        { href: "/quick-product", label: "Quick Add", icon: PlusCircle, roles: ["admin", "manager", "user"] },
-        { href: "/products", label: "Products", icon: Package, roles: ["admin", "manager", "user"] },
-        { href: "/categories", label: "Categories", icon: Tag, roles: ["admin", "manager", "user"] },
-        { href: "/product-distribute", label: "Product Distribute", icon: Truck, roles: ["admin", "manager"] },
+        { id: "quick-add", href: "/quick-product", label: "Quick Add", icon: PlusCircle, roles: ["admin", "manager", "user"] },
+        { id: "products", href: "/products", label: "Products", icon: Package, roles: ["admin", "manager", "user"] },
+        { id: "categories", href: "/categories", label: "Categories", icon: Tag, roles: ["admin", "manager", "user"] },
+        { id: "distribute", href: "/product-distribute", label: "Product Distribute", icon: Truck, roles: ["admin", "manager"] },
       ]
     },
     {
@@ -154,8 +154,8 @@ function NavMenu({ role }) {
       icon: Truck,
       collapsible: true,
       items: [
-        { href: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
-        { href: "/purchase-orders", label: "Purchase Orders", icon: ShoppingCart, roles: ["admin", "manager"] },
+        { id: "suppliers", href: "/suppliers", label: "Suppliers", icon: Truck, roles: ["admin", "manager"] },
+        { id: "purchase-orders", href: "/purchase-orders", label: "Purchase Orders", icon: ShoppingCart, roles: ["admin", "manager"] },
       ]
     },
     {
@@ -164,9 +164,9 @@ function NavMenu({ role }) {
       icon: Star,
       collapsible: true,
       items: [
-        { href: "/customers", label: "Customers", icon: Users, roles: ["admin", "manager", "user"] },
-        { href: "/loyalty", label: "Program Settings", icon: Settings, roles: ["admin", "manager"] },
-        { href: "/rewards", label: "Rewards", icon: Gift, roles: ["admin", "manager", "user"] },
+        { id: "customers", href: "/customers", label: "Customers", icon: Users, roles: ["admin", "manager", "user"] },
+        { id: "loyalty-settings", href: "/loyalty", label: "Program Settings", icon: Settings, roles: ["admin", "manager"] },
+        { id: "rewards", href: "/rewards", label: "Rewards", icon: Gift, roles: ["admin", "manager", "user"] },
       ]
     },
     {
@@ -175,7 +175,7 @@ function NavMenu({ role }) {
       icon: MapPin,
       collapsible: false,
       items: [
-        { href: "/outlets", label: "Outlets", icon: MapPin, roles: ["admin", "manager"] },
+        { id: "outlets", href: "/outlets", label: "Outlets", icon: MapPin, roles: ["admin", "manager"] },
       ]
     },
     {
@@ -184,8 +184,8 @@ function NavMenu({ role }) {
       icon: Clock,
       collapsible: true,
       items: [
-        { href: "/hr", label: "HR Dashboard", icon: Clock, roles: ["admin", "manager"] },
-        { href: "/hr/payroll", label: "Payroll", icon: DollarSign, roles: ["admin", "manager"] },
+        { id: "hr-dashboard", href: "/hr", label: "HR Dashboard", icon: Clock, roles: ["admin", "manager"] },
+        { id: "payroll", href: "/hr/payroll", label: "Payroll", icon: DollarSign, roles: ["admin", "manager"] },
       ]
     },
     {
@@ -194,19 +194,32 @@ function NavMenu({ role }) {
       icon: Settings,
       collapsible: true,
       items: [
-        { href: "/users", label: "Users", icon: Users, roles: ["admin", "manager"] },
-        { href: "/settings", label: "Settings", icon: Settings, roles: ["admin", "manager", "user"] },
+        { id: "users", href: "/users", label: "Users", icon: Users, roles: ["admin", "manager"] },
+        { id: "settings", href: "/settings", label: "Settings", icon: Settings, roles: ["admin", "manager", "user"] },
       ]
     }
   ]
+
+  // Get allowed sidebar menus from environment
+  const allowedMenusEnv = process.env.NEXT_PUBLIC_ALLOWED_SIDEBAR_MENUS || "main,sales,inventory,procurement,loyalty,outlets,hr,admin"
+  const allowedMenuIds = allowedMenusEnv.split(',').map(id => id.trim())
+
+  // Get allowed sidebar items from environment
+  const allowedItemsEnv = process.env.NEXT_PUBLIC_ALLOWED_SIDEBAR_ITEMS || "dashboard,analytics,pos,sales,returns,quick-add,products,categories,distribute,suppliers,purchase-orders,customers,loyalty-settings,rewards,outlets,hr-dashboard,payroll,users,settings"
+  const allowedItemIds = allowedItemsEnv.split(',').map(id => id.trim())
 
   return (
     <SidebarGroup>
       <SidebarGroupLabel>Navigation</SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu>
-          {menuGroups.map((group) => {
-            const visibleItems = group.items.filter((item) => !role || item.roles.includes(role))
+          {menuGroups.filter(group => allowedMenuIds.includes(group.key)).map((group) => {
+            const visibleItems = group.items.filter((item) => {
+              // Check if item is in allowed list first
+              if (!allowedItemIds.includes(item.id)) return false
+              // Then check user role
+              return !role || item.roles.includes(role)
+            })
             
             if (visibleItems.length === 0) return null
 

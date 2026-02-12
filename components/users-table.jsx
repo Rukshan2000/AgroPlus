@@ -10,6 +10,8 @@ import AddUserModal from "./add-user-modal"
 import EditUserOutletsModal from "./edit-user-outlets-modal"
 import { BarcodeGenerateModal } from "./barcode-generate-modal"
 
+const MAX_USERS = parseInt(process.env.NEXT_PUBLIC_MAX_USERS || "50")
+
 export default function UsersTable({ initialUsers = [] }) {
   const [users, setUsers] = useState(initialUsers)
   const [selectedUser, setSelectedUser] = useState(null)
@@ -64,8 +66,17 @@ export default function UsersTable({ initialUsers = [] }) {
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Users</CardTitle>
-            <AddUserModal onUserAdded={handleUserAdded} />
+            <div>
+              <CardTitle>Users</CardTitle>
+              {users.length >= MAX_USERS && (
+                <p className="text-sm text-red-500 mt-2">Maximum {MAX_USERS} users reached</p>
+              )}
+            </div>
+            <AddUserModal 
+              onUserAdded={handleUserAdded}
+              disabled={users.length >= MAX_USERS}
+              maxUsersReached={users.length >= MAX_USERS}
+            />
           </div>
         </CardHeader>
         <CardContent>

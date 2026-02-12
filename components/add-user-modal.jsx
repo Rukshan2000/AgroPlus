@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Plus } from 'lucide-react'
 import { BarcodeDisplay } from '@/components/barcode-display'
 
-export default function AddUserModal({ onUserAdded }) {
+export default function AddUserModal({ onUserAdded, disabled = false, maxUsersReached = false }) {
   const [open, setOpen] = useState(false)
   const [csrf, setCsrf] = useState('')
   const [outlets, setOutlets] = useState([])
@@ -128,9 +128,9 @@ export default function AddUserModal({ onUserAdded }) {
         />
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open && !disabled} onOpenChange={disabled ? () => {} : setOpen}>
         <DialogTrigger asChild>
-          <Button>
+          <Button disabled={disabled} title={maxUsersReached ? "Maximum users limit reached" : "Add new user"}>
             <Plus className="h-4 w-4 mr-2" />
             Add User
           </Button>
