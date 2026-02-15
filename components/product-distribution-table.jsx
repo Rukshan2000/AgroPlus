@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -45,6 +46,10 @@ export default function ProductDistributionTable({ initialDistributions = [], pr
   const [currentPage, setCurrentPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [limit] = useState(10)
+  const [selectedProducts, setSelectedProducts] = useState(new Set())
+  const [bulkOutletId, setBulkOutletId] = useState("")
+  const [bulkDistributionLoading, setBulkDistributionLoading] = useState(false)
+  const [bulkConfirm, setBulkConfirm] = useState(null)
 
   // Fetch distributions on component mount
   useEffect(() => {
@@ -128,6 +133,80 @@ export default function ProductDistributionTable({ initialDistributions = [], pr
     }
   }
 
+  function handleSelectProduct(productId) {
+    const newSelected = new Set(selectedProducts)
+    if (newSelected.has(productId)) {
+      newSelected.delete(productId)
+    } else {
+      newSelected.add(productId)
+    }
+    setSelectedProducts(newSelected)
+  }
+
+  function handleSelectAll() {
+    if (selectedProducts.size === products.length) {
+      setSelectedProducts(new Set())
+    } else {
+      setSelectedProducts(new Set(products.map(p => p.id)))
+    }
+  }
+
+  function handleBulkDistributeClick() {
+    if (selectedProducts.size === 0) {
+      alert("Please select at least one product")
+      return
+    }
+    if (!bulkOutletId) {
+      alert("Please select an outlet")
+      return
+    }
+    setBulkConfirm(true)
+  }
+
+  async function handleBulkDistributeConfirm() {
+    if (!csrfToken) {
+      console.error("CSRF token not available")
+      return
+    }
+
+    setBulkDistributionLoading(true)
+    try {
+      const distributionsToCreate = Array.from(selectedProducts).map(productId => {
+        const product = products.find(p => p.id === productId)
+        return {
+          product_id: productId,
+          outlet_id: parseInt(bulkOutletId),
+          quantity_distributed: product.available_quantity || 0,
+          notes: `Bulk distribution on ${new Date().toLocaleDateString()}`,
+        }
+      })
+
+      for (const distribution of distributionsToCreate) {
+        const res = await fetch("/api/product-distribute", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-csrf-token": csrfToken,
+          },
+          body: JSON.stringify(distribution),
+        })
+
+        if (!res.ok) {
+          console.error("Error creating distribution:", distribution)
+        }
+      }
+
+      setSelectedProducts(new Set())
+      setBulkOutletId("")
+      setBulkConfirm(false)
+      await fetchDistributions()
+    } catch (error) {
+      console.error("Error in bulk distribution:", error)
+    } finally {
+      setBulkDistributionLoading(false)
+    }
+  }
+
   const filteredDistributions = distributions.filter(dist => {
     const matchesSearch = !search || 
       dist.product_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -177,6 +256,97 @@ export default function ProductDistributionTable({ initialDistributions = [], pr
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Bulk Distribution Section */}
+          {selectedProducts.size > 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium mb-2 block">
+                    Send {selectedProducts.size} product(s) to outlet:
+                  </Label>
+                  <Select value={bulkOutletId} onValueChange={setBulkOutletId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select outlet" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {outlets.map(outlet => (
+                        <SelectItem key={outlet.id} value={outlet.id.toString()}>
+                          {outlet.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button 
+                  onClick={handleBulkDistributeClick}
+                  disabled={!bulkOutletId}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <Truck className="h-4 w-4 mr-2" />
+                  Distribute All
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => setSelectedProducts(new Set())}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Available Products for Bulk Distribution */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Available Products for Bulk Distribution</h3>
+              {products.length > 0 && (
+                <input
+                  type="checkbox"
+                  checked={selectedProducts.size === products.length && products.length > 0}
+                  onChange={handleSelectAll}
+                  className="rounded"
+                  title="Select all products"
+                />
+              )}
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+              {products.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground col-span-full">
+                  No products available
+                </div>
+              ) : (
+                products.map(product => (
+                  <div 
+                    key={product.id} 
+                    className={`border rounded-lg p-3 cursor-pointer transition ${
+                      selectedProducts.has(product.id) 
+                        ? 'border-blue-500 bg-blue-50' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => handleSelectProduct(product.id)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.has(product.id)}
+                        onChange={() => handleSelectProduct(product.id)}
+                        className="rounded mt-1"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="flex-1">
+                        <p className="font-medium text-sm">{product.name}</p>
+                        <p className="text-xs text-muted-foreground">{product.sku}</p>
+                        <p className="text-sm font-semibold mt-1">
+                          Available: <span className="text-green-600">{product.available_quantity || 0}</span> units
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           {/* Table Section */}
@@ -307,6 +477,39 @@ export default function ProductDistributionTable({ initialDistributions = [], pr
           <AlertDialogCancel>Cancel</AlertDialogCancel>
           <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600">
             Delete
+          </AlertDialogAction>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Distribution Confirmation Dialog */}
+      <AlertDialog open={!!bulkConfirm} onOpenChange={(open) => !open && setBulkConfirm(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Bulk Distribution</AlertDialogTitle>
+            <AlertDialogDescription>
+              <div className="space-y-2">
+                <p>You are about to distribute {selectedProducts.size} product(s) to <strong>{outlets.find(o => o.id === parseInt(bulkOutletId))?.name || 'selected outlet'}</strong>.</p>
+                <p className="text-sm">This will distribute the full available quantity of each selected product:</p>
+                <ul className="list-disc pl-5 text-sm space-y-1">
+                  {Array.from(selectedProducts).map(productId => {
+                    const product = products.find(p => p.id === productId)
+                    return (
+                      <li key={productId}>
+                        <strong>{product?.name}</strong> - {product?.available_quantity || 0} units
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction 
+            onClick={handleBulkDistributeConfirm}
+            disabled={bulkDistributionLoading}
+            className="bg-green-600"
+          >
+            {bulkDistributionLoading ? "Distributing..." : "Confirm Distribution"}
           </AlertDialogAction>
         </AlertDialogContent>
       </AlertDialog>
