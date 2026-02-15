@@ -105,9 +105,10 @@ export default function PrintProductsButton({ products }) {
             <table>
               <thead>
                 <tr>
-                  <th style="width: 15%;">ID</th>
-                  <th style="width: 60%;">Product Name</th>
-                  <th style="width: 25%;">Price (LKR)</th>
+                  <th style="width: 12%;">ID</th>
+                  <th style="width: 50%;">Product Name</th>
+                  <th style="width: 15%;">Quantity</th>
+                  <th style="width: 23%;">Price (LKR)</th>
                 </tr>
               </thead>
               <tbody>
@@ -118,6 +119,7 @@ export default function PrintProductsButton({ products }) {
                 <tr>
                   <td>${product.product_id}</td>
                   <td>${product.name}</td>
+                  <td style="text-align: center;">${product.available_quantity || product.quantity || 0}</td>
                   <td style="text-align: right;">${parseFloat(product.price || 0).toFixed(2)}</td>
                 </tr>
           `
@@ -130,10 +132,13 @@ export default function PrintProductsButton({ products }) {
         `
       })
 
+      // Calculate total quantity from distributed quantities
+      const totalQuantity = products.reduce((sum, product) => sum + (product.available_quantity || product.quantity || 0), 0)
+
       // Add footer
       html += `
           <div class="footer">
-            <p>Total Products: ${products.length} | Categories: ${Object.keys(productsByCategory).length}</p>
+            <p>Total Products: ${products.length} | Total Quantity: ${totalQuantity} | Categories: ${Object.keys(productsByCategory).length}</p>
             <p>Printing Date: ${new Date().toLocaleString()}</p>
           </div>
         </body>
