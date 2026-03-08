@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react"
 import ProductDistributionTable from "@/components/product-distribution-table"
+import BulkDistributeModal from "@/components/bulk-distribute-modal"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Truck, Package, MapPin, TrendingUp } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Truck, Package, MapPin, TrendingUp, Zap } from "lucide-react"
 
 async function fetchDistributions() {
   try {
@@ -52,6 +54,7 @@ export default function ProductDistributePage() {
     stats: {}
   })
   const [loading, setLoading] = useState(true)
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -86,6 +89,29 @@ export default function ProductDistributePage() {
     loadData()
   }, [])
 
+  const handleBulkDistributionSuccess = async () => {
+    // Reload data after successful bulk distribution
+    const [distributionsData, productsData, outletsData] = await Promise.all([
+      fetchDistributions(),
+      fetchProducts(),
+      fetchOutlets()
+    ])
+
+    const stats = {
+      totalDistributions: distributionsData.total || 0,
+      totalQuantity: distributionsData.distributions?.reduce((sum, d) => sum + parseFloat(d.quantity_distributed || 0), 0) || 0,
+      uniqueProducts: new Set(distributionsData.distributions?.map(d => d.product_id)).size || 0,
+      uniqueOutlets: new Set(distributionsData.distributions?.map(d => d.outlet_id)).size || 0,
+    }
+
+    setInitialData({
+      distributions: distributionsData.distributions || [],
+      products: productsData,
+      outlets: outletsData,
+      stats
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -100,6 +126,15 @@ export default function ProductDistributePage() {
 
   return (
     <div className="space-y-6">
+      {/* Bulk Distribution Modal */}
+      <BulkDistributeModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        products={initialData.products}
+        outlets={initialData.outlets}
+        onSuccess={handleBulkDistributionSuccess}
+      />
+
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
@@ -110,6 +145,15 @@ export default function ProductDistributePage() {
           Distribute available products from warehouse to different outlets
         </p>
       </div>
+
+      {/* Quick Action Button */}
+      <Button 
+        onClick={() => setIsBulkModalOpen(true)}
+        className="bg-orange-600 hover:bg-orange-700 gap-2 w-full sm:w-auto"
+      >
+        <Zap className="h-4 w-4" />
+        Quick Bulk Distribution
+      </Button>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
