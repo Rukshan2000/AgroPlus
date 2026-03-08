@@ -22,11 +22,28 @@ async function fetchDistributions() {
 
 async function fetchProducts() {
   try {
-    const res = await fetch("/api/products?page=1&limit=1000")
-    if (res.ok) {
-      const data = await res.json()
-      return data.products || []
+    let allProducts = []
+    let page = 1
+    let hasMore = true
+
+    while (hasMore) {
+      const res = await fetch(`/api/products?page=${page}&limit=1000`)
+      if (res.ok) {
+        const data = await res.json()
+        allProducts = allProducts.concat(data.products || [])
+        
+        // Check if there are more pages
+        if (data.totalPages && page >= data.totalPages) {
+          hasMore = false
+        } else {
+          page++
+        }
+      } else {
+        hasMore = false
+      }
     }
+    
+    return allProducts
   } catch (error) {
     console.error("Error fetching products:", error)
   }

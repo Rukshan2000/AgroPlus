@@ -43,7 +43,7 @@ export default function BulkDistributeModal({
     notes: "",
   })
 
-  const availableProducts = products.filter(p => p.available_quantity > 0)
+  const availableProducts = products
   const selectedProductIds = formData.selected_product_ids
   const selectedProducts = availableProducts.filter(p => selectedProductIds.includes(p.id))
   const allProductsSelected = availableProducts.length > 0 && selectedProductIds.length === availableProducts.length
@@ -102,7 +102,7 @@ export default function BulkDistributeModal({
       // Distribute each selected product to the outlet
       for (const productId of selectedProductIds) {
         const product = products.find(p => p.id === productId)
-        if (!product || product.available_quantity <= 0) continue
+        if (!product) continue
 
         try {
           const res = await fetch("/api/product-distribute", {
@@ -114,7 +114,7 @@ export default function BulkDistributeModal({
             body: JSON.stringify({
               product_id: parseInt(productId),
               outlet_id: parseInt(formData.outlet_id),
-              quantity_distributed: parseFloat(product.available_quantity),
+              quantity_distributed: parseFloat(product.stock_quantity),
               notes: formData.notes.trim() || "",
             }),
           })
@@ -180,7 +180,7 @@ export default function BulkDistributeModal({
   }
 
   const selectedOutlet = getSelectedOutlet()
-  const totalQtyToDistribute = selectedProducts.reduce((sum, p) => sum + (parseFloat(p.available_quantity) || 0), 0)
+  const totalQtyToDistribute = selectedProducts.reduce((sum, p) => sum + (parseFloat(p.stock_quantity) || 0), 0)
 
   const handleClose = () => {
     if (!loading) {
@@ -225,7 +225,12 @@ export default function BulkDistributeModal({
           {/* Products Selection */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-base font-semibold">Products to Distribute</Label>
+              <div>
+                <Label className="text-base font-semibold">Products to Distribute</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {availableProducts.length} products available
+                </p>
+              </div>
               <Button
                 type="button"
                 variant="outline"
@@ -237,9 +242,9 @@ export default function BulkDistributeModal({
               </Button>
             </div>
 
-            {availableProducts.length === 0 ? (
+            {products.length === 0 ? (
               <div className="text-center py-6 text-muted-foreground">
-                No products available for distribution
+                No products found
               </div>
             ) : (
               <ScrollArea className="border rounded-md h-64 p-4">
@@ -261,7 +266,7 @@ export default function BulkDistributeModal({
                           <p className="text-sm text-muted-foreground">{product.sku}</p>
                         </div>
                         <span className="text-sm font-semibold text-blue-600 ml-4">
-                          Qty: {product.available_quantity}
+                          Stock: {product.stock_quantity}
                         </span>
                       </label>
                     </div>

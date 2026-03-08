@@ -21,7 +21,7 @@ import { z } from "zod"
 const distributionSchema = z.object({
   product_id: z.number().positive("Product is required"),
   outlet_id: z.number().positive("Outlet is required"),
-  quantity_distributed: z.number().positive("Quantity must be greater than 0"),
+  quantity_distributed: z.number().min(0, "Quantity must be 0 or greater"),
   notes: z.string().optional().or(z.literal(''))
 })
 
@@ -91,14 +91,6 @@ export async function create(request) {
       return NextResponse.json(
         { error: 'Outlet not found' },
         { status: 404 }
-      )
-    }
-
-    // Check if product has sufficient quantity
-    if (product.available_quantity < validated.quantity_distributed) {
-      return NextResponse.json(
-        { error: `Insufficient stock. Available: ${product.available_quantity}, Requested: ${validated.quantity_distributed}` },
-        { status: 400 }
       )
     }
 

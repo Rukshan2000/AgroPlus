@@ -26,7 +26,11 @@ export default function POSSystem() {
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [discount, setDiscount] = useState('') // Per-item discount
+  const [discountByPrice, setDiscountByPrice] = useState('') // Per-item discount by selling price
+  const [itemDiscountType, setItemDiscountType] = useState('percentage') // 'percentage' or 'price'
   const [billDiscount, setBillDiscount] = useState('') // Whole bill discount
+  const [billDiscountByPrice, setBillDiscountByPrice] = useState('') // Bill discount by final price
+  const [billDiscountType, setBillDiscountType] = useState('percentage') // 'percentage' or 'price'
   const [showBill, setShowBill] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentDetails, setPaymentDetails] = useState(null)
@@ -131,6 +135,51 @@ export default function POSSystem() {
     setFilteredProducts(sortedProducts)
   }, [productSearch, products, sortBy, sortOrder])
 
+  // Recalculate cart items when item discount changes
+  useEffect(() => {
+    if (cart.length === 0) return
+    
+    setCart(prev => prev.map(item => {
+      const itemPrice = item.originalPrice
+      let discountPercent = 0
+      
+      // Calculate discount based on current discount mode
+      if (itemDiscountType === 'price' && discountByPrice) {
+        const pkrDiscount = parseFloat(discountByPrice)
+        const finalPrice = Math.max(0, itemPrice - pkrDiscount)
+        discountPercent = itemPrice > 0 ? ((itemPrice - finalPrice) / itemPrice) * 100 : 0
+        
+        return {
+          ...item,
+          discount: discountPercent,
+          unitPrice: finalPrice,
+          total: finalPrice * item.quantity
+        }
+      } else if (itemDiscountType === 'percentage' && discount) {
+        discountPercent = parseFloat(discount) || 0
+        const discountAmount = (itemPrice * discountPercent) / 100
+        const finalPrice = itemPrice - discountAmount
+        
+        return {
+          ...item,
+          discount: discountPercent,
+          unitPrice: finalPrice,
+          total: finalPrice * item.quantity
+        }
+      } else if (!discount && !discountByPrice) {
+        // No discount applied
+        return {
+          ...item,
+          discount: 0,
+          unitPrice: itemPrice,
+          total: itemPrice * item.quantity
+        }
+      }
+      
+      return item
+    }))
+  }, [discount, discountByPrice, itemDiscountType, cart.length])
+
   const loadProducts = async (outletId) => {
     try {
       let url
@@ -192,6 +241,32 @@ export default function POSSystem() {
 
   const getProductPrice = (product) => {
     return parseFloat(product.price) || 0
+  }
+
+  // Calculate discount percentage from selling price
+  const calculateDiscountFromPrice = (originalPrice, sellingPrice) => {
+    if (!originalPrice || !sellingPrice || originalPrice <= 0 || sellingPrice < 0) return 0
+    if (sellingPrice >= originalPrice) return 0
+    const discount = ((originalPrice - sellingPrice) / originalPrice) * 100
+    return Math.max(0, Math.min(100, discount)) // Clamp between 0-100
+  }
+
+  // Get effective discount percentage (for percentage mode) or amount (for PKR mode)
+  const getItemDiscountPercent = (product) => {
+    if (itemDiscountType === 'price' && discountByPrice) {
+      // In PKR mode, return the amount directly as "percent" (will be handled differently in calculations)
+      return Math.max(0, parseFloat(discountByPrice)) // Returns PKR amount, not a percentage
+    }
+    return parseFloat(discount) || 0
+  }
+
+  // Get effective bill discount percentage (for percentage mode) or amount (for PKR mode)
+  const getBillDiscountPercent = () => {
+    if (billDiscountType === 'price' && billDiscountByPrice) {
+      // In PKR mode, return the amount directly (will be handled differently in calculations)
+      return Math.max(0, parseFloat(billDiscountByPrice)) // Returns PKR amount, not a percentage
+    }
+    return parseFloat(billDiscount) || 0
   }
 
   // Sorting function
@@ -288,9 +363,22 @@ export default function POSSystem() {
     
     const qty = parseFloat(quantity) || 1
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
-    const discountPercent = parseFloat(discount) || 0
-    const discountAmount = (productPrice * discountPercent) / 100
-    const finalPrice = productPrice - discountAmount
+    
+    // Calculate final price based on discount mode
+    let finalPrice = productPrice
+    let discountPercent = 0
+    if (itemDiscountType === 'price' && discountByPrice) {
+      // PKR discount mode: deduct PKR amount from price
+      const pkrDiscount = parseFloat(discountByPrice)
+      finalPrice = Math.max(0, productPrice - pkrDiscount)
+      // Calculate percentage for display purposes
+      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
+    } else {
+      // Percentage discount mode
+      discountPercent = parseFloat(discount) || 0
+      const discountAmount = (productPrice * discountPercent) / 100
+      finalPrice = productPrice - discountAmount
+    }
 
     if (existingItemIndex >= 0) {
       // Product already in cart, increase quantity
@@ -407,9 +495,22 @@ export default function POSSystem() {
     })
 
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
-    const discountPercent = parseFloat(discount) || 0
-    const discountAmount = (productPrice * discountPercent) / 100
-    const finalPrice = productPrice - discountAmount
+    
+    // Calculate final price based on discount mode
+    let finalPrice = productPrice
+    let discountPercent = 0
+    if (itemDiscountType === 'price' && discountByPrice) {
+      // PKR discount mode: deduct PKR amount from price
+      const pkrDiscount = parseFloat(discountByPrice)
+      finalPrice = Math.max(0, productPrice - pkrDiscount)
+      // Calculate percentage for display purposes
+      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
+    } else {
+      // Percentage discount mode
+      discountPercent = parseFloat(discount) || 0
+      const discountAmount = (productPrice * discountPercent) / 100
+      finalPrice = productPrice - discountAmount
+    }
 
     if (existingItemIndex >= 0) {
       // Product already in cart, increase quantity
@@ -543,9 +644,22 @@ export default function POSSystem() {
     setQuantity(maxAvailable.toString())
 
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
-    const discountPercent = parseFloat(discount) || 0
-    const discountAmount = (productPrice * discountPercent) / 100
-    const finalPrice = productPrice - discountAmount
+    
+    // Calculate final price based on discount mode
+    let finalPrice = productPrice
+    let discountPercent = 0
+    if (itemDiscountType === 'price' && discountByPrice) {
+      // PKR discount mode: deduct PKR amount from price
+      const pkrDiscount = parseFloat(discountByPrice)
+      finalPrice = Math.max(0, productPrice - pkrDiscount)
+      // Calculate percentage for display purposes
+      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
+    } else {
+      // Percentage discount mode
+      discountPercent = parseFloat(discount) || 0
+      const discountAmount = (productPrice * discountPercent) / 100
+      finalPrice = productPrice - discountAmount
+    }
 
     if (isUpdating && existingItemIndex !== undefined) {
       // Update existing item
@@ -654,9 +768,13 @@ export default function POSSystem() {
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
-  const billDiscountPercent = parseFloat(billDiscount) || 0
-  const billDiscountAmount = (subtotal * billDiscountPercent) / 100
-  const total = subtotal - billDiscountAmount
+  const billDiscountAmount = billDiscountType === 'price' && billDiscountByPrice 
+    ? Math.min(parseFloat(billDiscountByPrice), subtotal) // PKR mode: flat discount
+    : (subtotal * (parseFloat(billDiscount) || 0)) / 100 // Percentage mode
+  const billDiscountPercent = billDiscountType === 'price' && billDiscountByPrice && subtotal > 0
+    ? ((parseFloat(billDiscountByPrice) / subtotal) * 100) // Calculate as percentage for display
+    : (parseFloat(billDiscount) || 0) // Percentage mode value
+  const total = Math.max(0, subtotal - billDiscountAmount)
 
   const printBill = async () => {
     // Get printer settings from localStorage
@@ -797,6 +915,9 @@ export default function POSSystem() {
     setShowBill(false)
     setSaleId(null)
     setBillDiscount('')
+    setBillDiscountByPrice('')
+    setDiscount('')
+    setDiscountByPrice('')
     toast({
       title: "Cart cleared",
       description: "All items removed from cart"
@@ -1285,16 +1406,47 @@ export default function POSSystem() {
               {/* Item Discount */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-yellow-400 font-bold">Item:</span>
+                {/* Mode Toggle */}
+                <div className="flex gap-1 border-2 border-yellow-700 rounded-none">
+                  <button
+                    onClick={() => {
+                      setItemDiscountType('percentage')
+                      setDiscountByPrice('')
+                    }}
+                    className={`px-2 h-7 text-xs font-bold border-r-2 border-yellow-700 ${itemDiscountType === 'percentage' ? 'bg-yellow-600 text-white' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}
+                  >
+                    %
+                  </button>
+                  <button
+                    onClick={() => {
+                      setItemDiscountType('price')
+                      setDiscount('')
+                    }}
+                    className={`px-2 h-7 text-xs font-bold ${itemDiscountType === 'price' ? 'bg-yellow-600 text-white' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}
+                  >
+                    PKR
+                  </button>
+                </div>
+                
+                {/* Input based on mode */}
                 {discountMode === 'item' ? (
                   <input type="text" value={discountInputValue} readOnly className="w-16 h-9 px-2 text-sm font-bold bg-blue-950 text-white border-2 border-blue-600 rounded-none text-center" />
+                ) : itemDiscountType === 'percentage' ? (
+                  <>
+                    <input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500 rounded-none text-center" placeholder="0" />
+                    <span className="text-sm text-gray-400">%</span>
+                    {[5, 10, 15, 20].map((pct) => (
+                      <button key={`item-${pct}`} onClick={() => setDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${discount === pct.toString() ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-yellow-800 hover:bg-yellow-700 border-yellow-900 text-yellow-100'}`}>{pct}%</button>
+                    ))}
+                    {discount && parseFloat(discount) > 0 && <button onClick={() => setDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+                  </>
                 ) : (
-                  <input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500 rounded-none text-center" placeholder="0" />
+                  <>
+                    <input type="number" min="0" step="0.01" value={discountByPrice} onChange={(e) => setDiscountByPrice(e.target.value)} className="w-24 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500 rounded-none text-center" placeholder="Discount amount" />
+                    <span className="text-sm text-gray-400">PKR</span>
+                    {discountByPrice && parseFloat(discountByPrice) > 0 && <button onClick={() => setDiscountByPrice('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+                  </>
                 )}
-                <span className="text-sm text-gray-400">%</span>
-                {[5, 10, 15, 20].map((pct) => (
-                  <button key={`item-${pct}`} onClick={() => setDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${discount === pct.toString() ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-yellow-800 hover:bg-yellow-700 border-yellow-900 text-yellow-100'}`}>{pct}%</button>
-                ))}
-                {discount && parseFloat(discount) > 0 && <button onClick={() => setDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
               </div>
               
               <div className="w-px h-9 bg-gray-600"></div>
@@ -1302,16 +1454,47 @@ export default function POSSystem() {
               {/* Bill Discount */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-orange-400 font-bold">Bill:</span>
+                {/* Mode Toggle */}
+                <div className="flex gap-1 border-2 border-orange-700 rounded-none">
+                  <button
+                    onClick={() => {
+                      setBillDiscountType('percentage')
+                      setBillDiscountByPrice('')
+                    }}
+                    className={`px-2 h-7 text-xs font-bold border-r-2 border-orange-700 ${billDiscountType === 'percentage' ? 'bg-orange-600 text-white' : 'bg-orange-900 text-orange-100 hover:bg-orange-800'}`}
+                  >
+                    %
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBillDiscountType('price')
+                      setBillDiscount('')
+                    }}
+                    className={`px-2 h-7 text-xs font-bold ${billDiscountType === 'price' ? 'bg-orange-600 text-white' : 'bg-orange-900 text-orange-100 hover:bg-orange-800'}`}
+                  >
+                    PKR
+                  </button>
+                </div>
+                
+                {/* Input based on mode */}
                 {discountMode === 'bill' ? (
                   <input type="text" value={discountInputValue} readOnly className="w-16 h-9 px-2 text-sm font-bold bg-blue-950 text-white border-2 border-blue-600 rounded-none text-center" />
+                ) : billDiscountType === 'percentage' ? (
+                  <>
+                    <input type="number" min="0" max="100" value={billDiscount} onChange={(e) => setBillDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-orange-500 rounded-none text-center" placeholder="0" />
+                    <span className="text-sm text-gray-400">%</span>
+                    {[5, 10, 15, 20].map((pct) => (
+                      <button key={`bill-${pct}`} onClick={() => setBillDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${billDiscount === pct.toString() ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-800 hover:bg-orange-700 border-orange-900 text-orange-100'}`}>{pct}%</button>
+                    ))}
+                    {billDiscount && parseFloat(billDiscount) > 0 && <button onClick={() => setBillDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+                  </>
                 ) : (
-                  <input type="number" min="0" max="100" value={billDiscount} onChange={(e) => setBillDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-orange-500 rounded-none text-center" placeholder="0" />
+                  <>
+                    <input type="number" min="0" step="0.01" value={billDiscountByPrice} onChange={(e) => setBillDiscountByPrice(e.target.value)} className="w-24 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-orange-500 rounded-none text-center" placeholder="Discount amount" />
+                    <span className="text-sm text-gray-400">PKR</span>
+                    {billDiscountByPrice && parseFloat(billDiscountByPrice) > 0 && <button onClick={() => setBillDiscountByPrice('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+                  </>
                 )}
-                <span className="text-sm text-gray-400">%</span>
-                {[5, 10, 15, 20].map((pct) => (
-                  <button key={`bill-${pct}`} onClick={() => setBillDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${billDiscount === pct.toString() ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-800 hover:bg-orange-700 border-orange-900 text-orange-100'}`}>{pct}%</button>
-                ))}
-                {billDiscount && parseFloat(billDiscount) > 0 && <button onClick={() => setBillDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
               </div>
             </div>
           </div>
@@ -1421,15 +1604,36 @@ export default function POSSystem() {
               <span>SUBTOTAL:</span>
               <span>LKR {subtotal.toFixed(2)}</span>
             </div>
-            {discount && parseFloat(discount) > 0 && (
+            {((discount && parseFloat(discount) > 0) || (discountByPrice && parseFloat(discountByPrice) > 0)) && (
               <div className="flex justify-between text-yellow-400 font-bold text-sm">
-                <span>Item Discount ({discount}%):</span>
-                <span>-LKR {((subtotal * parseFloat(discount)) / 100).toFixed(2)}</span>
+                <span>
+                  Item Discount (
+                  {itemDiscountType === 'percentage' 
+                    ? `${discount}%` 
+                    : `PKR ${discountByPrice}`
+                  }):
+                </span>
+                <span>-LKR {cart.reduce((sum, item) => {
+                  if (itemDiscountType === 'price' && discountByPrice) {
+                    // PKR mode: multiply PKR discount by quantity
+                    return sum + (parseFloat(discountByPrice) * item.quantity)
+                  } else {
+                    // Percentage mode: calculate from original price
+                    const itemDiscountPercent = parseFloat(item.discount) || 0
+                    return sum + ((item.originalPrice * itemDiscountPercent) / 100) * item.quantity
+                  }
+                }, 0).toFixed(2)}</span>
               </div>
             )}
             {billDiscountAmount > 0 && (
               <div className="flex justify-between text-orange-400 font-bold text-base">
-                <span>Bill Discount ({billDiscount}%):</span>
+                <span>
+                  Bill Discount (
+                  {billDiscountType === 'percentage' 
+                    ? `${billDiscount}%` 
+                    : `PKR ${billDiscountByPrice}`
+                  }):
+                </span>
                 <span>-LKR {billDiscountAmount.toFixed(2)}</span>
               </div>
             )}
