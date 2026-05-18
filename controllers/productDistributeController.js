@@ -38,7 +38,7 @@ export async function list(request) {
   try {
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get("page")) || 1
-    const limit = parseInt(searchParams.get("limit")) || 10
+    const limit = parseInt(searchParams.get("limit")) || 1000
     const product_id = searchParams.get("product_id") ? parseInt(searchParams.get("product_id")) : null
     const outlet_id = searchParams.get("outlet_id") ? parseInt(searchParams.get("outlet_id")) : null
     const start_date = searchParams.get("start_date") || null

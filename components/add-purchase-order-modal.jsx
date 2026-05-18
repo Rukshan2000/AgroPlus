@@ -42,7 +42,7 @@ export default function AddPurchaseOrderModal({
 
   const fetchProducts = async () => {
     try {
-      const response = await fetch("/api/products?limit=1000")
+      const response = await fetch("/api/products?limit=10000")
       if (!response.ok) throw new Error("Failed to fetch products")
       const data = await response.json()
       setProducts(data.products || [])

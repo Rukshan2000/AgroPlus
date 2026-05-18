@@ -9,7 +9,7 @@ import { Truck, Package, MapPin, TrendingUp, Zap } from "lucide-react"
 
 async function fetchDistributions() {
   try {
-    const res = await fetch("/api/product-distribute?page=1&limit=100")
+    const res = await fetch("/api/product-distribute?page=1&limit=1000")
     if (res.ok) {
       const data = await res.json()
       return data
@@ -27,7 +27,7 @@ async function fetchProducts() {
     let hasMore = true
 
     while (hasMore) {
-      const res = await fetch(`/api/products?page=${page}&limit=1000`)
+      const res = await fetch(`/api/products?page=${page}&limit=10000`)
       if (res.ok) {
         const data = await res.json()
         allProducts = allProducts.concat(data.products || [])
@@ -52,7 +52,7 @@ async function fetchProducts() {
 
 async function fetchOutlets() {
   try {
-    const res = await fetch("/api/outlets?page=1&limit=1000")
+    const res = await fetch("/api/outlets?page=1&limit=10000")
     if (res.ok) {
       const data = await res.json()
       return data.outlets || []

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -33,12 +33,48 @@ export default function DistributeProductModal({
   const { csrfToken } = useCsrf()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [formData, setFormData] = useState({
-    product_id: editingDistribution?.product_id || "",
-    outlet_id: editingDistribution?.outlet_id || "",
-    quantity_distributed: editingDistribution?.quantity_distributed || "",
-    notes: editingDistribution?.notes || "",
-  })
+  
+  // Initialize formData - auto-fill with editing data
+  const getInitialFormData = () => {
+    if (editingDistribution) {
+      return {
+        product_id: editingDistribution.product_id || "",
+        outlet_id: editingDistribution.outlet_id || "",
+        quantity_distributed: editingDistribution.quantity_distributed || "",
+        notes: editingDistribution.notes || "",
+      }
+    }
+    return {
+      product_id: "",
+      outlet_id: "",
+      quantity_distributed: "",
+      notes: "",
+    }
+  }
+  
+  const [formData, setFormData] = useState(getInitialFormData())
+
+  // Auto-fill form when editing distribution changes
+  useEffect(() => {
+    if (isOpen) {
+      if (editingDistribution) {
+        setFormData({
+          product_id: editingDistribution.product_id || "",
+          outlet_id: editingDistribution.outlet_id || "",
+          quantity_distributed: editingDistribution.quantity_distributed || "",
+          notes: editingDistribution.notes || "",
+        })
+      } else {
+        setFormData({
+          product_id: "",
+          outlet_id: "",
+          quantity_distributed: "",
+          notes: "",
+        })
+      }
+      setError(null)
+    }
+  }, [isOpen, editingDistribution])
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
@@ -64,10 +100,20 @@ export default function DistributeProductModal({
     setLoading(true)
 
     try {
-      if (!formData.product_id || !formData.outlet_id || !formData.quantity_distributed) {
-        setError("Please fill in all required fields")
-        setLoading(false)
-        return
+      // When editing, product and outlet are disabled/pre-filled, only quantity is required
+      if (editingDistribution) {
+        if (!formData.quantity_distributed) {
+          setError("Please enter quantity to distribute")
+          setLoading(false)
+          return
+        }
+      } else {
+        // When creating, all fields are required
+        if (!formData.product_id || !formData.outlet_id || !formData.quantity_distributed) {
+          setError("Please fill in all required fields")
+          setLoading(false)
+          return
+        }
       }
 
       const selectedProduct = getSelectedProduct()
@@ -84,18 +130,41 @@ export default function DistributeProductModal({
         ? `/api/product-distribute?id=${editingDistribution.id}`
         : "/api/product-distribute"
 
+      // Build request body - only send what needs to be sent
+      let requestBody = {}
+      
+      if (editingDistribution) {
+        // When updating, only send changed quantity
+        requestBody = {
+          quantity_distributed: parseFloat(formData.quantity_distributed),
+          notes: formData.notes || null,
+        }
+      } else {
+        // When creating, send all required fields as numbers
+        const productId = parseInt(formData.product_id)
+        const outletId = parseInt(formData.outlet_id)
+        
+        if (!productId || isNaN(productId) || !outletId || isNaN(outletId)) {
+          setError("Please select both product and outlet")
+          setLoading(false)
+          return
+        }
+        
+        requestBody = {
+          product_id: productId,
+          outlet_id: outletId,
+          quantity_distributed: parseFloat(formData.quantity_distributed),
+          notes: formData.notes || null,
+        }
+      }
+
       const response = await fetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
           "x-csrf-token": csrfToken,
         },
-        body: JSON.stringify({
-          product_id: parseInt(formData.product_id),
-          outlet_id: parseInt(formData.outlet_id),
-          quantity_distributed: parseFloat(formData.quantity_distributed),
-          notes: formData.notes || null,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {

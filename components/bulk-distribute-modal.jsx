@@ -91,6 +91,12 @@ export default function BulkDistributeModal({
       return
     }
 
+    const outletId = parseInt(formData.outlet_id)
+    if (!outletId || isNaN(outletId)) {
+      setError("Invalid outlet selected")
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -112,10 +118,10 @@ export default function BulkDistributeModal({
               "x-csrf-token": csrfToken,
             },
             body: JSON.stringify({
-              product_id: parseInt(productId),
-              outlet_id: parseInt(formData.outlet_id),
+              product_id: productId,
+              outlet_id: outletId,
               quantity_distributed: parseFloat(product.stock_quantity),
-              notes: formData.notes.trim() || "",
+              notes: formData.notes.trim() || null,
             }),
           })
 

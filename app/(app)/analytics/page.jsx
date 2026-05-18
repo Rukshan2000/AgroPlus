@@ -47,7 +47,7 @@ export default function AnalyticsPage() {
 
   const loadOutlets = async () => {
     try {
-      const response = await fetch('/api/outlets?limit=1000')
+      const response = await fetch('/api/outlets?limit=10000')
       if (response.ok) {
         const data = await response.json()
         setOutlets(data.outlets || [])
@@ -70,7 +70,7 @@ export default function AnalyticsPage() {
         // Return analytics
         fetch(`/api/returns?stats=true&days=30${selectedOutlet ? `&outlet_id=${selectedOutlet}` : ''}`),
         // Product distribution for outlet performance
-        fetch(`/api/product-distribution${selectedOutlet ? `?outlet_id=${selectedOutlet}` : '?limit=1000'}`),
+        fetch(`/api/product-distribution${selectedOutlet ? `?outlet_id=${selectedOutlet}` : '?limit=10000'}`),
       ]
 
       const [metricsRes, returnsRes, distRes] = await Promise.all(promises)

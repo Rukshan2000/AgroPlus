@@ -150,6 +150,8 @@ export async function createProduct(productData) {
   } = productData
   
   const finalSellingPrice = determineSellingPrice(price, selling_price)
+  // Convert empty SKU to null to avoid unique constraint violations
+  const finalSku = sku === '' ? null : sku
   
   const result = await query(`
     INSERT INTO products (
@@ -161,8 +163,8 @@ export async function createProduct(productData) {
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
     RETURNING *
   `, [
-    name, description, finalSellingPrice, buying_price, finalSellingPrice, 
-    sku, category, stock_quantity, stock_quantity, is_active, image_url, created_by, 
+    name, description, price, buying_price, finalSellingPrice, 
+    finalSku, category, stock_quantity, stock_quantity, is_active, image_url, created_by, 
     unit_type, unit_value, expiry_date, manufacture_date, alert_before_days, 
     minimum_quantity, allowReturn
   ]);
@@ -236,6 +238,8 @@ export async function updateProduct(id, updateData) {
   } = updateData
   
   const finalSellingPrice = determineSellingPrice(price, selling_price)
+  // Convert empty SKU to null to avoid unique constraint violations
+  const finalSku = sku === '' ? null : sku
   
   const result = await query(`
     UPDATE products SET 
@@ -260,8 +264,8 @@ export async function updateProduct(id, updateData) {
     WHERE id = $18
     RETURNING *
   `, [
-    name, description, finalSellingPrice, buying_price, finalSellingPrice, 
-    sku, category, stock_quantity, is_active, image_url, unit_type, unit_value,
+    name, description, price, buying_price, finalSellingPrice, 
+    finalSku, category, stock_quantity, is_active, image_url, unit_type, unit_value,
     expiry_date, manufacture_date, alert_before_days, minimum_quantity, allowReturn, id
   ])
   

@@ -42,21 +42,18 @@ export default function ProductDistributionTable({ initialDistributions = [], pr
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingDistribution, setEditingDistribution] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [total, setTotal] = useState(0)
-  const [limit] = useState(10)
 
   // Fetch distributions on component mount
   useEffect(() => {
     fetchDistributions()
-  }, [search, filterOutlet, currentPage])
+  }, [search, filterOutlet])
 
   async function fetchDistributions() {
     setLoading(true)
     try {
       const params = new URLSearchParams({
-        page: currentPage,
-        limit: limit,
+        page: 1,
+        limit: 1000,
       })
 
       if (filterOutlet !== "all") {
@@ -67,7 +64,6 @@ export default function ProductDistributionTable({ initialDistributions = [], pr
       if (res.ok) {
         const data = await res.json()
         setDistributions(data.distributions || [])
-        setTotal(data.total || 0)
       }
     } catch (error) {
       console.error("Error fetching distributions:", error)
@@ -135,8 +131,6 @@ export default function ProductDistributionTable({ initialDistributions = [], pr
       dist.sku?.toLowerCase().includes(search.toLowerCase())
     return matchesSearch
   })
-
-  const pages = Math.ceil(total / limit)
 
   return (
     <div className="space-y-6">
@@ -255,33 +249,6 @@ export default function ProductDistributionTable({ initialDistributions = [], pr
               </TableBody>
             </Table>
           </div>
-
-          {/* Pagination */}
-          {pages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Page {currentPage} of {pages}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setCurrentPage(prev => Math.min(pages, prev + 1))}
-                  disabled={currentPage === pages}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 

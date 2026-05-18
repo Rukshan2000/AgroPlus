@@ -26,10 +26,6 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const fileInputRef = useRef(null)
   const { toast } = useToast()
   
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 10
-  
   // Selection state for bulk operations
   const [selectedProducts, setSelectedProducts] = useState(new Set())
   const [selectAll, setSelectAll] = useState(false)
@@ -47,7 +43,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   useEffect(() => {
     const loadAllProducts = async () => {
       try {
-        const response = await fetch("/api/products?limit=1000")
+        const response = await fetch("/api/products?limit=10000")
         if (response.ok) {
           const data = await response.json()
           setProducts(data.products || [])
@@ -74,14 +70,8 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
     return matchesSearch && matchesCategory && matchesStatus
   })
 
-  // Pagination
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage)
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const paginatedProducts = filteredProducts.slice(startIndex, startIndex + itemsPerPage)
-
-  // Reset to first page when filters change
+  // Handle filter changes
   const handleFilterChange = (filterSetter, value) => {
-    setCurrentPage(1)
     filterSetter(value)
   }
 
@@ -327,7 +317,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
               }
 
               // Refresh products list
-              const productsResponse = await fetch("/api/products?limit=100")
+              const productsResponse = await fetch("/api/products?limit=1000")
               const productsData = await productsResponse.json()
               setProducts(productsData.products)
             }
@@ -587,7 +577,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
               No products found
             </div>
           ) : (
-            paginatedProducts.map((product) => (
+            filteredProducts.map((product) => (
               <div key={product.id} className="grid grid-cols-10 items-center py-3 border-b last:border-b-0">
                 <div className="flex items-center">
                   <Checkbox
@@ -668,43 +658,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
           )}
         </div>
 
-        {/* Pagination */}
-        {filteredProducts.length > 0 && (
-          <div className="flex items-center justify-between mt-6 pt-4 border-t">
-            <div className="text-sm text-muted-foreground">
-              Showing {startIndex + 1} to {Math.min(startIndex + itemsPerPage, filteredProducts.length)} of {filteredProducts.length} products
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1 || loading}
-              >
-                Previous
-              </Button>
-              <div className="flex items-center gap-2">
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                  <Button
-                    key={page}
-                    variant={page === currentPage ? "default" : "outline"}
-                    onClick={() => setCurrentPage(page)}
-                    disabled={loading}
-                    className="min-w-10"
-                  >
-                    {page}
-                  </Button>
-                ))}
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages || loading}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        )}
+
       </CardContent>
 
       {/* Add Product Modal */}

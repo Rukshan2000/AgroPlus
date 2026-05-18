@@ -64,7 +64,7 @@ export default function SalesPage() {
 
   const loadOutlets = async () => {
     try {
-      const response = await fetch('/api/outlets?limit=1000')
+      const response = await fetch('/api/outlets?limit=10000')
       if (response.ok) {
         const data = await response.json()
         setOutlets(data.outlets || [])

@@ -19,7 +19,7 @@ export default function PurchaseOrdersPage() {
     setLoading(true)
     try {
       // Fetch suppliers for dropdown
-      const suppliersRes = await fetch(`/api/suppliers?limit=1000`)
+      const suppliersRes = await fetch(`/api/suppliers?limit=10000`)
       if (suppliersRes.ok) {
         const suppliersData = await suppliersRes.json()
         setSuppliers(suppliersData.suppliers || [])
@@ -32,7 +32,7 @@ export default function PurchaseOrdersPage() {
 
     try {
       // Fetch purchase orders
-      const posRes = await fetch(`/api/purchase-orders?limit=1000`)
+      const posRes = await fetch(`/api/purchase-orders?limit=10000`)
       if (posRes.ok) {
         const posData = await posRes.json()
         setPurchaseOrders(posData.purchase_orders || [])

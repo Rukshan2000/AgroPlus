@@ -17,7 +17,7 @@ export default function SuppliersPage() {
   const fetchSuppliers = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/suppliers?limit=100`)
+      const response = await fetch(`/api/suppliers?limit=1000`)
       if (!response.ok) throw new Error("Failed to fetch suppliers")
       const data = await response.json()
       setSuppliers(data.suppliers)

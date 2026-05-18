@@ -67,7 +67,7 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
       const endDateStr = endDate.toISOString();
       
       const response = await fetch(
-        `/api/sales?limit=100&page=1&start_date=${startDateStr}&end_date=${endDateStr}`
+        `/api/sales?limit=1000&page=1&start_date=${startDateStr}&end_date=${endDateStr}`
       );
       const data = await response.json();
       if (response.ok) {

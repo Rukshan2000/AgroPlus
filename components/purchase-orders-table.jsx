@@ -38,7 +38,7 @@ export default function PurchaseOrdersTable({ initialSuppliers = [] }) {
 
   const fetchSuppliers = async () => {
     try {
-      const response = await fetch(`/api/suppliers?limit=1000`)
+      const response = await fetch(`/api/suppliers?limit=10000`)
       if (!response.ok) throw new Error("Failed to fetch suppliers")
       const data = await response.json()
       setSuppliers(data.suppliers || [])
@@ -50,7 +50,7 @@ export default function PurchaseOrdersTable({ initialSuppliers = [] }) {
   const fetchPurchaseOrders = async () => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/purchase-orders?limit=100`)
+      const response = await fetch(`/api/purchase-orders?limit=1000`)
       if (!response.ok) throw new Error("Failed to fetch purchase orders")
       const data = await response.json()
       setPurchaseOrders(data.purchase_orders)

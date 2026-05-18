@@ -186,10 +186,10 @@ export default function POSSystem() {
       
       // If outlet is selected, load distributed products for that outlet
       if (outletId) {
-        url = `/api/products/distributed?outlet_id=${outletId}&limit=100&is_active=true`
+        url = `/api/products/distributed?outlet_id=${outletId}&limit=1000&is_active=true`
       } else {
         // Fallback to all active products if no outlet
-        url = '/api/products?limit=100&is_active=true'
+        url = '/api/products?limit=1000&is_active=true'
       }
 
       console.log('Loading products from:', url)
@@ -206,7 +206,7 @@ export default function POSSystem() {
         // If distributed endpoint fails, fallback to regular products
         if (outletId) {
           console.log('Falling back to regular products API')
-          const fallbackResponse = await fetch('/api/products?limit=100&is_active=true', { credentials: 'include' })
+          const fallbackResponse = await fetch('/api/products?limit=1000&is_active=true', { credentials: 'include' })
           if (fallbackResponse.ok) {
             const data = await fallbackResponse.json()
             setProducts(data.products || [])
@@ -224,7 +224,7 @@ export default function POSSystem() {
       })
       // Fallback to all products on error
       try {
-        const response = await fetch('/api/products?limit=100&is_active=true', { credentials: 'include' })
+        const response = await fetch('/api/products?limit=1000&is_active=true', { credentials: 'include' })
         if (response.ok) {
           const data = await response.json()
           setProducts(data.products || [])

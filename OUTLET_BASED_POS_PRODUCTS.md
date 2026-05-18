@@ -64,7 +64,7 @@ Display products in POS grid
 ## API Response Example
 
 ```javascript
-GET /api/products/distributed?outlet_id=1&limit=100&is_active=true
+GET /api/products/distributed?outlet_id=1&limit=1000&is_active=true
 
 Response:
 {
