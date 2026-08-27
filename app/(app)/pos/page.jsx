@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ShoppingCart, CheckCircle, LogOut, Undo2 } from 'lucide-react'
+import { ShoppingCart, CheckCircle, LogOut, Undo2, Plus } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { useSession } from '@/hooks/use-session'
 import ProductInput from '@/components/pos/ProductInput'
@@ -9,22 +9,28 @@ import Cart from '@/components/pos/Cart'
 import Receipt from '@/components/pos/Receipt'
 import ThermalReceipt from '@/components/pos/ThermalReceipt'
 import PriceVariationModal from '@/components/pos/price-variation-modal'
+import ProductQuantityModal from '@/components/pos/product-quantity-modal'
 import POSReturnModal from '@/components/pos-return-modal'
 import PaymentModal from '@/components/pos/payment-modal'
+import InsufficientStockWarning from '@/components/pos/insufficient-stock-warning'
 import PrintProductsButton from '@/components/pos/print-products-button'
 import CashDrawerButton from '@/components/pos/cash-drawer-button'
+import VirtualKeyboard from '@/components/pos/virtual-keyboard'
+import { CustomerFormModal } from '@/components/customer-form-modal'
 import { Button } from '@/components/ui/button'
-import { ConnectionStatusBadge } from '@/components/connection-status'
 import ThemeToggle from '@/components/theme-toggle'
-import offlineProductModel from '@/models/offlineProductModel'
-import offlineSalesModel from '@/models/offlineSalesModel'
+import ScreenSizeChanger from '@/components/pos/screen-size-changer'
 
 export default function POSSystem() {
   const [cart, setCart] = useState([])
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [discount, setDiscount] = useState('') // Per-item discount
+  const [discountByPrice, setDiscountByPrice] = useState('') // Per-item discount by selling price
+  const [itemDiscountType, setItemDiscountType] = useState('percentage') // 'percentage' or 'price'
   const [billDiscount, setBillDiscount] = useState('') // Whole bill discount
+  const [billDiscountByPrice, setBillDiscountByPrice] = useState('') // Bill discount by final price
+  const [billDiscountType, setBillDiscountType] = useState('percentage') // 'percentage' or 'price'
   const [showBill, setShowBill] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [paymentDetails, setPaymentDetails] = useState(null)
@@ -37,9 +43,19 @@ export default function POSSystem() {
   const [sessionTime, setSessionTime] = useState(0) // Timer state
   const [showPriceVariationModal, setShowPriceVariationModal] = useState(false)
   const [selectedProductForVariation, setSelectedProductForVariation] = useState(null)
+  const [showProductQuantityModal, setShowProductQuantityModal] = useState(false)
+  const [selectedProductForQuantity, setSelectedProductForQuantity] = useState(null)
   const [showReturnModal, setShowReturnModal] = useState(false)
   const [saleId, setSaleId] = useState(null) // Store sale ID for receipt
   const [selectedProductIndex, setSelectedProductIndex] = useState(0) // For arrow key navigation
+  const [selectedOutlet, setSelectedOutlet] = useState(null) // Store selected outlet
+  const [selectedCartIndex, setSelectedCartIndex] = useState(null) // For cart item quantity editing
+  const [cartInputQty, setCartInputQty] = useState('') // Temporary quantity input for selected cart item
+  const [showStockWarning, setShowStockWarning] = useState(false) // Stock warning modal
+  const [stockWarningData, setStockWarningData] = useState(null) // Data for stock warning modal
+  const [discountMode, setDiscountMode] = useState(null) // 'item' or 'bill' for discount editing via keyboard
+  const [discountInputValue, setDiscountInputValue] = useState('') // Temporary discount value
+  const [showCustomerModal, setShowCustomerModal] = useState(false) // Show/hide create customer modal
   const { toast } = useToast()
   const { session } = useSession()
   const isCashier = session?.user?.role === 'cashier'
@@ -63,7 +79,12 @@ export default function POSSystem() {
 
   // Load products on component mount
   useEffect(() => {
-    loadProducts()
+    // Get selected outlet from localStorage
+    const outletId = localStorage.getItem('selectedOutlet')
+    if (outletId) {
+      setSelectedOutlet(parseInt(outletId))
+    }
+    loadProducts(outletId)
   }, [])
 
   // Session timer effect
@@ -76,6 +97,16 @@ export default function POSSystem() {
       return () => clearInterval(timer)
     }
   }, [session?.user])
+
+  // Focus quantity input when editing cart item
+  useEffect(() => {
+    if (selectedCartIndex !== null) {
+      setTimeout(() => {
+        const input = document.querySelector('.quantity-input')
+        if (input) input.focus()
+      }, 10)
+    }
+  }, [selectedCartIndex])
 
   // Format session time
   const formatSessionTime = (seconds) => {
@@ -104,29 +135,103 @@ export default function POSSystem() {
     setFilteredProducts(sortedProducts)
   }, [productSearch, products, sortBy, sortOrder])
 
-  const loadProducts = async () => {
-    try {
-      // Try offline first, then fallback to API if online
-      const offlineResult = await offlineProductModel.findAll({ limit: 100 });
+  // Recalculate cart items when item discount changes
+  useEffect(() => {
+    if (cart.length === 0) return
+    
+    setCart(prev => prev.map(item => {
+      const itemPrice = item.originalPrice
+      let discountPercent = 0
       
-      if (offlineResult.success && offlineResult.products.length > 0) {
-        // Filter active products
-        const activeProducts = offlineResult.products.filter(p => p.is_active !== false);
-        setProducts(activeProducts);
-      } else {
-        // Fallback to API if no offline data
-        const response = await fetch('/api/products?limit=100&is_active=true');
-        if (response.ok) {
-          const data = await response.json();
-          setProducts(data.products || []);
+      // Calculate discount based on current discount mode
+      if (itemDiscountType === 'price' && discountByPrice) {
+        const pkrDiscount = parseFloat(discountByPrice)
+        const finalPrice = Math.max(0, itemPrice - pkrDiscount)
+        discountPercent = itemPrice > 0 ? ((itemPrice - finalPrice) / itemPrice) * 100 : 0
+        
+        return {
+          ...item,
+          discount: discountPercent,
+          unitPrice: finalPrice,
+          total: finalPrice * item.quantity
+        }
+      } else if (itemDiscountType === 'percentage' && discount) {
+        discountPercent = parseFloat(discount) || 0
+        const discountAmount = (itemPrice * discountPercent) / 100
+        const finalPrice = itemPrice - discountAmount
+        
+        return {
+          ...item,
+          discount: discountPercent,
+          unitPrice: finalPrice,
+          total: finalPrice * item.quantity
+        }
+      } else if (!discount && !discountByPrice) {
+        // No discount applied
+        return {
+          ...item,
+          discount: 0,
+          unitPrice: itemPrice,
+          total: itemPrice * item.quantity
         }
       }
+      
+      return item
+    }))
+  }, [discount, discountByPrice, itemDiscountType, cart.length])
+
+  const loadProducts = async (outletId) => {
+    try {
+      let url
+      
+      // If outlet is selected, load distributed products for that outlet
+      if (outletId) {
+        url = `/api/products/distributed?outlet_id=${outletId}&limit=1000&is_active=true`
+      } else {
+        // Fallback to all active products if no outlet
+        url = '/api/products?limit=1000&is_active=true'
+      }
+
+      console.log('Loading products from:', url)
+      const response = await fetch(url, { credentials: 'include' })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setProducts(data.products || [])
+      } else {
+        // Log the error response for debugging
+        const errorText = await response.text()
+        console.error('Products API error:', response.status, errorText)
+        
+        // If distributed endpoint fails, fallback to regular products
+        if (outletId) {
+          console.log('Falling back to regular products API')
+          const fallbackResponse = await fetch('/api/products?limit=1000&is_active=true', { credentials: 'include' })
+          if (fallbackResponse.ok) {
+            const data = await fallbackResponse.json()
+            setProducts(data.products || [])
+            return
+          }
+        }
+        throw new Error('Failed to fetch products')
+      }
     } catch (error) {
+      console.error('Error loading products:', error)
       toast({
         title: "Error",
         description: "Failed to load products",
         variant: "destructive"
       })
+      // Fallback to all products on error
+      try {
+        const response = await fetch('/api/products?limit=1000&is_active=true', { credentials: 'include' })
+        if (response.ok) {
+          const data = await response.json()
+          setProducts(data.products || [])
+        }
+      } catch (fallbackError) {
+        console.error('Fallback product load failed:', fallbackError)
+      }
     }
   }
 
@@ -136,6 +241,32 @@ export default function POSSystem() {
 
   const getProductPrice = (product) => {
     return parseFloat(product.price) || 0
+  }
+
+  // Calculate discount percentage from selling price
+  const calculateDiscountFromPrice = (originalPrice, sellingPrice) => {
+    if (!originalPrice || !sellingPrice || originalPrice <= 0 || sellingPrice < 0) return 0
+    if (sellingPrice >= originalPrice) return 0
+    const discount = ((originalPrice - sellingPrice) / originalPrice) * 100
+    return Math.max(0, Math.min(100, discount)) // Clamp between 0-100
+  }
+
+  // Get effective discount percentage (for percentage mode) or amount (for PKR mode)
+  const getItemDiscountPercent = (product) => {
+    if (itemDiscountType === 'price' && discountByPrice) {
+      // In PKR mode, return the amount directly as "percent" (will be handled differently in calculations)
+      return Math.max(0, parseFloat(discountByPrice)) // Returns PKR amount, not a percentage
+    }
+    return parseFloat(discount) || 0
+  }
+
+  // Get effective bill discount percentage (for percentage mode) or amount (for PKR mode)
+  const getBillDiscountPercent = () => {
+    if (billDiscountType === 'price' && billDiscountByPrice) {
+      // In PKR mode, return the amount directly (will be handled differently in calculations)
+      return Math.max(0, parseFloat(billDiscountByPrice)) // Returns PKR amount, not a percentage
+    }
+    return parseFloat(billDiscount) || 0
   }
 
   // Sorting function
@@ -179,7 +310,7 @@ export default function POSSystem() {
       })
       // Focus back to product input
       setTimeout(() => {
-        document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
       }, 100)
       return
     }
@@ -191,8 +322,9 @@ export default function POSSystem() {
         variant: "destructive"
       })
       setProductId('')
+      setProductSearch('')
       setTimeout(() => {
-        document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
       }, 100)
       return
     }
@@ -229,11 +361,24 @@ export default function POSSystem() {
       return item.id === product.id && !item.variationId
     })
     
-    const qty = parseInt(quantity) || 1
+    const qty = parseFloat(quantity) || 1
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
-    const discountPercent = parseFloat(discount) || 0
-    const discountAmount = (productPrice * discountPercent) / 100
-    const finalPrice = productPrice - discountAmount
+    
+    // Calculate final price based on discount mode
+    let finalPrice = productPrice
+    let discountPercent = 0
+    if (itemDiscountType === 'price' && discountByPrice) {
+      // PKR discount mode: deduct PKR amount from price
+      const pkrDiscount = parseFloat(discountByPrice)
+      finalPrice = Math.max(0, productPrice - pkrDiscount)
+      // Calculate percentage for display purposes
+      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
+    } else {
+      // Percentage discount mode
+      discountPercent = parseFloat(discount) || 0
+      const discountAmount = (productPrice * discountPercent) / 100
+      finalPrice = productPrice - discountAmount
+    }
 
     if (existingItemIndex >= 0) {
       // Product already in cart, increase quantity
@@ -241,13 +386,19 @@ export default function POSSystem() {
       const newQuantity = existingItem.quantity + qty
       
       if (newQuantity > product.available_quantity) {
-        toast({
-          title: "Insufficient stock",
-          description: `Only ${product.available_quantity} units available. Current cart has ${existingItem.quantity}.`,
-          variant: "destructive"
+        // Show warning modal instead of just toast
+        setStockWarningData({
+          productName: product.name,
+          availableQuantity: product.available_quantity,
+          requestedQuantity: qty,
+          currentCartQuantity: existingItem.quantity,
+          product,
+          priceVariation,
+          isUpdating: true,
+          existingItemIndex
         })
-        setQuantity(Math.max(1, product.available_quantity - existingItem.quantity).toString())
-        return
+        setShowStockWarning(true)
+        return // Don't reset quantity, keep it for user review
       }
 
       // Update existing item quantity
@@ -268,16 +419,29 @@ export default function POSSystem() {
         description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
         duration: 1000
       })
+
+      // Reset inputs after successful add
+      setProductId('')
+      setProductSearch('')
+      setQuantity('1')
+      setTimeout(() => {
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+      }, 100)
     } else {
       // Product not in cart, add new item
       if (qty > product.available_quantity) {
-        toast({
-          title: "Insufficient stock",
-          description: `Only ${product.available_quantity} units available`,
-          variant: "destructive"
+        // Show warning modal instead of just toast
+        setStockWarningData({
+          productName: product.name,
+          availableQuantity: product.available_quantity,
+          requestedQuantity: qty,
+          currentCartQuantity: 0,
+          product,
+          priceVariation,
+          isUpdating: false
         })
-        setQuantity(product.available_quantity.toString())
-        return
+        setShowStockWarning(true)
+        return // Don't reset quantity, keep it for user review
       }
 
       const cartItem = {
@@ -301,16 +465,15 @@ export default function POSSystem() {
         description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} × ${qty}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
         duration: 1000
       })
+
+      // Reset inputs after successful add
+      setProductId('')
+      setProductSearch('')
+      setQuantity('1')
+      setTimeout(() => {
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+      }, 100)
     }
-
-    setProductId('')
-    setQuantity('1')
-    // Don't clear discount automatically - let user keep it for multiple items
-
-    // Auto-focus back to product input for next item
-    setTimeout(() => {
-      document.querySelector('input[placeholder="Scan or type product..."]')?.focus()
-    }, 100)
   }
 
   const handleVariationSelect = (variation) => {
@@ -318,6 +481,241 @@ export default function POSSystem() {
       addProductToCart(selectedProductForVariation, variation)
       setSelectedProductForVariation(null)
     }
+  }
+
+  // Handle adding product to cart from quantity modal
+  const handleQuantityModalAddToCart = (product, priceVariation, quantity) => {
+    // Check if product is already in cart (with same variation if applicable)
+    const variationKey = priceVariation ? `${product.id}-${priceVariation.id}` : product.id
+    const existingItemIndex = cart.findIndex(item => {
+      if (priceVariation) {
+        return item.id === product.id && item.variationId === priceVariation.id
+      }
+      return item.id === product.id && !item.variationId
+    })
+
+    const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
+    
+    // Calculate final price based on discount mode
+    let finalPrice = productPrice
+    let discountPercent = 0
+    if (itemDiscountType === 'price' && discountByPrice) {
+      // PKR discount mode: deduct PKR amount from price
+      const pkrDiscount = parseFloat(discountByPrice)
+      finalPrice = Math.max(0, productPrice - pkrDiscount)
+      // Calculate percentage for display purposes
+      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
+    } else {
+      // Percentage discount mode
+      discountPercent = parseFloat(discount) || 0
+      const discountAmount = (productPrice * discountPercent) / 100
+      finalPrice = productPrice - discountAmount
+    }
+
+    if (existingItemIndex >= 0) {
+      // Product already in cart, increase quantity
+      const existingItem = cart[existingItemIndex]
+      const newQuantity = existingItem.quantity + quantity
+
+      if (newQuantity > product.available_quantity) {
+        // Show warning modal instead of just toast
+        setStockWarningData({
+          productName: product.name,
+          availableQuantity: product.available_quantity,
+          requestedQuantity: quantity,
+          currentCartQuantity: existingItem.quantity,
+          product,
+          priceVariation,
+          isUpdating: true,
+          existingItemIndex
+        })
+        setShowStockWarning(true)
+        return // Don't reset quantity, keep it for user review
+      }
+
+      // Update existing item quantity
+      setCart(prev => prev.map((item, index) =>
+        index === existingItemIndex
+          ? {
+              ...item,
+              quantity: newQuantity,
+              total: finalPrice * newQuantity,
+              discount: discountPercent, // Update discount if changed
+              unitPrice: finalPrice // Update unit price if discount changed
+            }
+          : item
+      ))
+
+      toast({
+        title: "Quantity updated",
+        description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        duration: 1000
+      })
+    } else {
+      // Product not in cart, add new item
+      if (quantity > product.available_quantity) {
+        // Show warning modal instead of just toast
+        setStockWarningData({
+          productName: product.name,
+          availableQuantity: product.available_quantity,
+          requestedQuantity: quantity,
+          currentCartQuantity: 0,
+          product,
+          priceVariation,
+          isUpdating: false
+        })
+        setShowStockWarning(true)
+        return // Don't reset quantity, keep it for user review
+      }
+
+      const cartItem = {
+        id: product.id,
+        sku: product.sku,
+        name: product.name,
+        variationId: priceVariation?.id || null,
+        variationName: priceVariation?.variant_name || null,
+        originalPrice: productPrice,
+        quantity: quantity,
+        discount: discountPercent,
+        unitPrice: finalPrice,
+        total: finalPrice * quantity,
+        availableStock: product.available_quantity
+      }
+
+      setCart(prev => [...prev, cartItem])
+
+      toast({
+        title: "Added to cart",
+        description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} × ${quantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        duration: 1000
+      })
+    }
+  }
+
+  // Handle product click from grid - show quantity modal
+  const handleProductClick = async (product) => {
+    if (product.available_quantity <= 0) {
+      toast({
+        title: "Out of stock",
+        description: `${product.name} is currently out of stock`,
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Show quantity modal for all products
+    setSelectedProductForQuantity(product)
+    setShowProductQuantityModal(true)
+  }
+
+  const handleStockWarningConfirm = () => {
+    if (!stockWarningData) return
+
+    const { product, priceVariation, isUpdating, existingItemIndex, isCartEdit, cartIndex } = stockWarningData
+    const maxAvailable = Math.max(0, product.available_quantity - (stockWarningData.currentCartQuantity || 0))
+
+    // Handle cart item edit case (when user edits quantity from cart)
+    if (isCartEdit && cartIndex !== undefined) {
+      const item = cart[cartIndex]
+      setCart(prev => prev.map((cartItem, i) => 
+        i === cartIndex 
+          ? { ...cartItem, quantity: maxAvailable, total: cartItem.unitPrice * maxAvailable }
+          : cartItem
+      ))
+
+      toast({
+        title: "Quantity updated",
+        description: `${item.name} quantity set to ${maxAvailable} (Maximum available)`,
+        duration: 1000
+      })
+
+      setSelectedCartIndex(null)
+      setCartInputQty('')
+      setShowStockWarning(false)
+      setStockWarningData(null)
+      
+      setTimeout(() => {
+        document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+      }, 100)
+      return
+    }
+    
+    // Set quantity to maximum available
+    setQuantity(maxAvailable.toString())
+
+    const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
+    
+    // Calculate final price based on discount mode
+    let finalPrice = productPrice
+    let discountPercent = 0
+    if (itemDiscountType === 'price' && discountByPrice) {
+      // PKR discount mode: deduct PKR amount from price
+      const pkrDiscount = parseFloat(discountByPrice)
+      finalPrice = Math.max(0, productPrice - pkrDiscount)
+      // Calculate percentage for display purposes
+      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
+    } else {
+      // Percentage discount mode
+      discountPercent = parseFloat(discount) || 0
+      const discountAmount = (productPrice * discountPercent) / 100
+      finalPrice = productPrice - discountAmount
+    }
+
+    if (isUpdating && existingItemIndex !== undefined) {
+      // Update existing item
+      const newQuantity = stockWarningData.currentCartQuantity + maxAvailable
+      setCart(prev => prev.map((item, index) => 
+        index === existingItemIndex 
+          ? { 
+              ...item, 
+              quantity: newQuantity, 
+              total: finalPrice * newQuantity,
+              discount: discountPercent,
+              unitPrice: finalPrice
+            }
+          : item
+      ))
+
+      toast({
+        title: "Quantity updated",
+        description: `${product.name} quantity updated to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        duration: 1000
+      })
+    } else {
+      // Add new item with maximum available
+      const cartItem = {
+        id: product.id,
+        sku: product.sku,
+        name: product.name,
+        variationId: priceVariation?.id || null,
+        variationName: priceVariation?.variant_name || null,
+        originalPrice: productPrice,
+        quantity: maxAvailable,
+        discount: discountPercent,
+        unitPrice: finalPrice,
+        total: finalPrice * maxAvailable,
+        availableStock: product.available_quantity
+      }
+
+      setCart(prev => [...prev, cartItem])
+
+      toast({
+        title: "Added to cart",
+        description: `${product.name}${priceVariation ? ` (${priceVariation.variant_name})` : ''} × ${maxAvailable} (Maximum available)${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
+        duration: 1000
+      })
+    }
+
+    setProductId('')
+    setProductSearch('')
+    setQuantity('1')
+    setShowStockWarning(false)
+    setStockWarningData(null)
+
+    // Auto-focus back to product input for next item
+    setTimeout(() => {
+      document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+    }, 100)
   }
 
   const removeFromCart = (index) => {
@@ -337,11 +735,22 @@ export default function POSSystem() {
 
     const item = cart[index]
     if (newQty > item.availableStock) {
-      toast({
-        title: "Insufficient stock",
-        description: `Only ${item.availableStock} units available`,
-        variant: "destructive"
+      // Show warning modal for cart quantity edit
+      setStockWarningData({
+        productName: item.name,
+        availableQuantity: item.availableStock,
+        requestedQuantity: newQty,
+        currentCartQuantity: 0, // Not adding to existing, replacing
+        product: { 
+          id: item.id, 
+          name: item.name, 
+          available_quantity: item.availableStock 
+        },
+        priceVariation: item.variationId ? { id: item.variationId, variant_name: item.variationName } : null,
+        isCartEdit: true, // Flag to indicate this is a cart edit
+        cartIndex: index
       })
+      setShowStockWarning(true)
       return
     }
     
@@ -350,12 +759,22 @@ export default function POSSystem() {
         ? { ...item, quantity: newQty, total: item.unitPrice * newQty }
         : item
     ))
+    
+    toast({
+      title: "Quantity updated",
+      description: `${item.name} × ${newQty}`,
+      duration: 800
+    })
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
-  const billDiscountPercent = parseFloat(billDiscount) || 0
-  const billDiscountAmount = (subtotal * billDiscountPercent) / 100
-  const total = subtotal - billDiscountAmount
+  const billDiscountAmount = billDiscountType === 'price' && billDiscountByPrice 
+    ? Math.min(parseFloat(billDiscountByPrice), subtotal) // PKR mode: flat discount
+    : (subtotal * (parseFloat(billDiscount) || 0)) / 100 // Percentage mode
+  const billDiscountPercent = billDiscountType === 'price' && billDiscountByPrice && subtotal > 0
+    ? ((parseFloat(billDiscountByPrice) / subtotal) * 100) // Calculate as percentage for display
+    : (parseFloat(billDiscount) || 0) // Percentage mode value
+  const total = Math.max(0, subtotal - billDiscountAmount)
 
   const printBill = async () => {
     // Get printer settings from localStorage
@@ -496,6 +915,9 @@ export default function POSSystem() {
     setShowBill(false)
     setSaleId(null)
     setBillDiscount('')
+    setBillDiscountByPrice('')
+    setDiscount('')
+    setDiscountByPrice('')
     toast({
       title: "Cart cleared",
       description: "All items removed from cart"
@@ -532,6 +954,11 @@ export default function POSSystem() {
   const processSale = async (payment) => {
     setIsLoading(true)
     try {
+      const outletId = localStorage.getItem('selectedOutlet')
+      
+      // Calculate the actual total after points redemption
+      const actualTotal = total - (payment.points_value || 0)
+      
       const saleData = {
         items: cart.map(item => ({
           product_id: item.id,
@@ -547,63 +974,115 @@ export default function POSSystem() {
         subtotal,
         bill_discount_percentage: billDiscountPercent,
         bill_discount_amount: billDiscountAmount,
-        total,
+        total: actualTotal,
         payment_method: payment.method,
         amount_paid: payment.amount_paid,
         change_given: payment.change,
         cashier_id: session?.user?.id,
-        cashier_name: session?.user?.name
+        cashier_name: session?.user?.name,
+        outlet_id: outletId ? parseInt(outletId) : null,
+        // Loyalty points data
+        customer_id: payment.customer?.id || null,
+        points_redeemed: payment.points_redeemed || 0,
+        points_value: payment.points_value || 0,
+        points_earned: payment.points_earned || 0
       }
 
-      // Try offline storage first
-      const offlineResult = await offlineSalesModel.createSale(saleData);
-      
-      if (offlineResult.success) {
-        // Update local product stock
-        const stockUpdates = cart.map(item => ({
-          productId: item.id,
-          quantity: item.quantity,
-          operation: 'subtract'
-        }));
+      const response = await fetch('/api/sales', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(saleData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Set sale ID from API response - use first sale ID or generate one
+        const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
+        setSaleId(firstSaleId || `SALE-${Date.now()}`)
         
-        await offlineProductModel.bulkUpdateStock(stockUpdates);
+        // Debug log for loyalty points
+        console.log('Payment data received:', {
+          customer: payment.customer,
+          points_redeemed: payment.points_redeemed,
+          points_earned: payment.points_earned
+        })
         
-        // Set sale ID from offline result
-        const offlineSaleId = offlineResult.sale && offlineResult.sale._id ? offlineResult.sale._id : `OFF-${Date.now()}`
-        setSaleId(offlineSaleId)
+        // Handle loyalty points - redeem and earn using dedicated loyalty-points API
+        if (payment.customer?.id) {
+          console.log('Processing loyalty points for customer:', payment.customer.id)
+          const csrfToken = await fetch('/api/auth/csrf').then(r => r.json()).then(d => d.csrfToken)
+          
+          // Redeem points first (if any)
+          if (payment.points_redeemed > 0) {
+            try {
+              const redeemResponse = await fetch(`/api/customers/${payment.customer.id}/loyalty-points`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-csrf-token': csrfToken
+                },
+                body: JSON.stringify({
+                  action: 'redeem',
+                  points: payment.points_redeemed,
+                  sale_id: firstSaleId,
+                  description: `Points payment for Sale #${firstSaleId || 'N/A'}`,
+                  payment_value: payment.points_value // LKR value of the points used
+                })
+              })
+              
+              if (!redeemResponse.ok) {
+                const error = await redeemResponse.json()
+                console.error('Failed to redeem points:', error)
+              } else {
+                console.log('Points redeemed successfully:', payment.points_redeemed)
+              }
+            } catch (redeemError) {
+              console.error('Error redeeming loyalty points:', redeemError)
+            }
+          }
+          
+          // Earn points from purchase
+          if (payment.points_earned > 0) {
+            try {
+              const earnResponse = await fetch(`/api/customers/${payment.customer.id}/loyalty-points`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-csrf-token': csrfToken
+                },
+                body: JSON.stringify({
+                  action: 'earn',
+                  points: payment.points_earned,
+                  sale_id: firstSaleId,
+                  description: `Earned from purchase - Sale #${firstSaleId || 'N/A'}`
+                })
+              })
+              
+              if (!earnResponse.ok) {
+                const error = await earnResponse.json()
+                console.error('Failed to earn points:', error)
+              } else {
+                console.log('Points earned successfully:', payment.points_earned)
+              }
+            } catch (earnError) {
+              console.error('Error earning loyalty points:', earnError)
+            }
+          }
+        }
+        
         setShowBill(true);
         toast({
           title: "Sale completed",
-          description: "Transaction saved locally and will sync when online"
+          description: payment.customer 
+            ? `Transaction processed. ${payment.points_earned > 0 ? `Customer earned ${payment.points_earned} points.` : ''}`
+            : "Transaction processed successfully"
         });
-        
-        // Reload products to show updated stock
-        loadProducts();
+        loadProducts(outletId);
       } else {
-        // Fallback to API if offline storage fails
-        const response = await fetch('/api/sales', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(saleData)
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          // Set sale ID from API response - use first sale ID or generate one
-          const firstSaleId = result.sales && result.sales.length > 0 ? result.sales[0].id : null
-          setSaleId(firstSaleId || `SALE-${Date.now()}`)
-          setShowBill(true);
-          toast({
-            title: "Sale completed",
-            description: "Transaction processed successfully"
-          });
-          loadProducts();
-        } else {
-          const error = await response.json();
-          throw new Error(error.message || 'Failed to process sale');
-        }
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to process sale');
       }
     } catch (error) {
       toast({
@@ -618,7 +1097,14 @@ export default function POSSystem() {
 
   // Handle return success - reload products
   const handleReturnSuccess = () => {
-    loadProducts()
+    // Get outlet from localStorage or state
+    const outletId = localStorage.getItem('selectedOutlet') || selectedOutlet
+    console.log('handleReturnSuccess - reloading products for outlet:', outletId)
+    if (outletId) {
+      loadProducts(outletId)
+    } else {
+      loadProducts(null)
+    }
     toast({
       title: "Return Processed",
       description: "Inventory has been updated",
@@ -663,6 +1149,43 @@ export default function POSSystem() {
       if (e.ctrlKey && e.key === 'l' && isCashier) {
         e.preventDefault()
         handleLogout()
+        return
+      }
+
+      // Ctrl++ - Zoom In
+      if (e.ctrlKey && (e.key === '+' || e.key === '=')) {
+        e.preventDefault()
+        const currentZoom = parseInt(localStorage.getItem('pos-zoom') || '100')
+        const newZoom = Math.min(currentZoom + 10, 200)
+        document.documentElement.style.fontSize = `${(newZoom / 100) * 16}px`
+        document.body.style.transform = `scale(${newZoom / 100})`
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = `${100 / (newZoom / 100)}%`
+        localStorage.setItem('pos-zoom', newZoom)
+        return
+      }
+
+      // Ctrl+- - Zoom Out
+      if (e.ctrlKey && e.key === '-') {
+        e.preventDefault()
+        const currentZoom = parseInt(localStorage.getItem('pos-zoom') || '100')
+        const newZoom = Math.max(currentZoom - 10, 80)
+        document.documentElement.style.fontSize = `${(newZoom / 100) * 16}px`
+        document.body.style.transform = `scale(${newZoom / 100})`
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = `${100 / (newZoom / 100)}%`
+        localStorage.setItem('pos-zoom', newZoom)
+        return
+      }
+
+      // Ctrl+0 - Reset Zoom
+      if (e.ctrlKey && e.key === '0') {
+        e.preventDefault()
+        document.documentElement.style.fontSize = '16px'
+        document.body.style.transform = 'scale(1)'
+        document.body.style.transformOrigin = 'top left'
+        document.body.style.width = '100%'
+        localStorage.setItem('pos-zoom', '100')
         return
       }
       
@@ -741,666 +1264,497 @@ export default function POSSystem() {
   }, [cart.length, productId, quantity, filteredProducts, selectedProductIndex, isCashier, initiatePayment, clearCart, addToCart, handleLogout])
   
   return (
-    <div className={isCashier ? "fixed inset-0 bg-gray-50 dark:bg-black z-50 overflow-auto" : "min-h-screen bg-gray-50 dark:bg-black"}>
-      {/* Compact Header */}
-      <div className="bg-white dark:bg-black border-b dark:border-gray-800 shadow-sm">
-        <div className="px-4 py-2 flex justify-between items-center">
-          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <ShoppingCart className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-            Point of Sale System
-          </h1>
+    <div className={isCashier ? "fixed inset-0 bg-black z-50 overflow-hidden flex flex-col" : "min-h-screen bg-black flex flex-col"}>
+      {/* Header - Compact Terminal Style */}
+      <div className="bg-gray-950 border-b-2 border-gray-700">
+        <div className="px-3 py-2 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <h1 className="text-base font-bold text-white flex items-center gap-2">
+              <ShoppingCart className="h-5 w-5 text-green-500" />
+              POS SYSTEM
+            </h1>
+            {selectedOutlet && (
+              <span className="text-xs font-bold bg-green-600 text-white px-3 py-1 rounded border-2 border-green-400">
+                {localStorage.getItem('selectedOutletName') || `Outlet #${selectedOutlet}`}
+              </span>
+            )}
+          </div>
           
-          <div className="flex items-center gap-4">
-            {/* Connection Status + Theme Toggle */}
-            <div className="flex items-center gap-2">
-              <ConnectionStatusBadge />
-              <ThemeToggle />
-            </div>
-            
-            {/* Returns Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowReturnModal(true)}
-              className="flex items-center gap-2"
-            >
-              <Undo2 className="h-4 w-4" />
-              Returns
-            </Button>
-
-            {/* Print Products Button */}
-            <PrintProductsButton products={products} />
-
-            {/* Cash Drawer Button */}
-            <CashDrawerButton />
-            
-            {/* Session Timer for Cashiers */}
+          <div className="flex items-center gap-2 text-xs">
             {isCashier && (
-              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <div className="text-sm">
-                  <span className="text-gray-600 dark:text-gray-300">Session:</span>
-                  <span className="ml-1 font-mono font-bold text-blue-800 dark:text-blue-200">
-                    {formatSessionTime(sessionTime)}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {session?.user?.name}
-                </div>
+              <div className="flex items-center gap-1 bg-gray-800 px-2 py-1 rounded border border-gray-600">
+                <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-gray-300">Session: <span className="font-mono font-bold text-green-400">{formatSessionTime(sessionTime)}</span></span>
               </div>
             )}
-            {/* Keyboard Shortcuts Help */}
-            <div className="text-xs text-gray-600 dark:text-gray-300 space-x-3 hidden lg:flex">
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+Q</kbd> Product</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+↵</kbd> Sale</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+K</kbd> Clear</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+/</kbd> Search</span>
-              <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">←→↑↓</kbd> Navigate</span>
-              {isCashier && <span><kbd className="px-1.5 py-0.5 bg-gray-200 dark:bg-gray-800 rounded font-mono">Ctrl+L</kbd> Logout</span>}
-            </div>
-            
-            {/* Logout button for cashier users */}
+            <button
+              onClick={() => setShowReturnModal(true)}
+              className="h-7 px-2 bg-red-700 hover:bg-red-800 text-white font-bold text-xs border-2 border-red-900 rounded-none"
+              title="Process returns"
+            >
+              <Undo2 className="h-3 w-3 inline mr-1" />
+              RETURNS
+            </button>
+            <PrintProductsButton products={products} />
+            <CashDrawerButton />
+            <button
+              onClick={() => setShowCustomerModal(true)}
+              className="h-7 px-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs border-2 border-blue-900 rounded-none"
+              title="Create new customer"
+            >
+              <Plus className="h-3 w-3 inline mr-1" />
+              CUSTOMER
+            </button>
             {isCashier && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleLogout}
-                className="flex items-center gap-2"
+                className="h-7 px-2 text-xs"
               >
-                <LogOut className="h-4 w-4" />
-                Logout
+                <LogOut className="h-3 w-3" />
               </Button>
             )}
           </div>
         </div>
       </div>
 
-      <div className="p-4">
-        {/* Top Input Row - Quick Access */}
-        <div className="mb-4 bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
-          {/* Global Discount Indicator */}
-          {discount && parseFloat(discount) > 0 && (
-            <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></div>
-                  <span className="font-semibold text-yellow-800 dark:text-yellow-200">
-                    Global Discount Active: {discount}% OFF
-                  </span>
-                </div>
-                <button
-                  onClick={() => setDiscount('')}
-                  className="text-yellow-800 dark:text-yellow-200 hover:text-yellow-900 dark:hover:text-yellow-100 font-bold"
-                >
-                  Clear ×
-                </button>
-              </div>
-              <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                All items added to cart will have this discount applied automatically.
-              </p>
-            </div>
-          )}
-          
-          <div className="grid grid-cols-12 gap-4 items-end">
-            {/* Product Search/Input - 4 columns */}
-            <div className="col-span-4">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center justify-between">
-                <span>Product ID/SKU/Name</span>
-                <kbd className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded text-xs font-mono">Ctrl+Q</kbd>
-              </label>
-              <input
-                type="text"
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addToCart()}
-                className="w-full h-12 px-4 text-lg font-mono border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                placeholder="Scan or type product..."
-                autoFocus
-              />
-            </div>
+      {/* Main Content Area - Terminal Style */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Side - Products & Cart */}
+        <div className="flex-1 flex flex-col overflow-hidden border-r-2 border-gray-700">
+          {/* Product Input Section */}
+          <div className="bg-gray-900 border-b-2 border-gray-700 p-3">
+            <input
+              type="text"
+              value={productId}
+              onChange={(e) => {
+                setProductId(e.target.value)
+                setProductSearch(e.target.value)
+              }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter') {
+                  if (selectedCartIndex !== null) {
+                    // Apply quantity if cart item is selected
+                    const newQty = parseFloat(cartInputQty) || 1
+                    if (newQty > 0) {
+                      updateQuantity(selectedCartIndex, newQty)
+                      setSelectedCartIndex(null)
+                      setCartInputQty('')
+                    }
+                  } else if (cart.length > 0 && !productId) {
+                    // If cart has items and product field is empty, complete sale
+                    initiatePayment()
+                  } else if (productId) {
+                    // Add product
+                    addToCart()
+                  }
+                }
+              }}
+              className="w-full h-14 px-4 text-lg font-mono bg-gray-800 text-white border-2 border-gray-600 focus:border-green-500 focus:outline-none rounded-none"
+              placeholder="SCAN/TYPE PRODUCT..."
+              autoFocus
+            />
+          </div>
 
-            {/* Quantity - 2 columns */}
-            <div className="col-span-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                Quantity
-              </label>
-              <div className="flex">
+          {/* Product Grid */}
+          <div className="flex-1 overflow-y-auto bg-black p-2">
+            <div className="grid grid-cols-3 gap-1">
+              {filteredProducts.slice(0, 12).map((product, index) => (
                 <button
-                  onClick={() => setQuantity(Math.max(1, parseInt(quantity) - 1).toString())}
-                  className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-l-lg border border-r-0 flex items-center justify-center"
-                >
-                  <span className="text-lg font-bold">−</span>
-                </button>
-                <input
-                  type="number"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="h-12 w-20 text-center text-lg font-bold border-t border-b focus:ring-2 focus:ring-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                  min="1"
-                />
-                <button
-                  onClick={() => setQuantity((parseInt(quantity) + 1).toString())}
-                  className="h-12 w-12 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 flex items-center justify-center"
-                >
-                  <span className="text-lg font-bold">+</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Discount - 2 columns */}
-            <div className="col-span-2">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 block">
-                Global Discount % {discount && parseFloat(discount) > 0 && (
-                  <span className="text-green-600 dark:text-green-400 font-bold">
-                    (Active)
-                  </span>
-                )}
-              </label>
-              <div className="flex">
-                <input
-                  type="number"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                  className={`flex-1 h-12 px-4 text-lg border rounded-l-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100 ${
-                    discount && parseFloat(discount) > 0 
-                      ? 'border-green-500 bg-green-50 dark:bg-green-900/20' 
-                      : ''
+                  key={product.id}
+                  data-product-index={index}
+                  onClick={() => {
+                    setSelectedProductIndex(index)
+                    handleProductClick(product)
+                  }}
+                  className={`p-3 border-2 text-left transition-all rounded-none font-bold text-xs ${
+                    product.available_quantity > 0
+                      ? 'bg-gray-800 border-gray-600 hover:bg-gray-700 hover:border-gray-500 text-white'
+                      : 'bg-gray-900 border-gray-700 text-gray-500 opacity-50'
                   }`}
-                  placeholder="0"
-                  min="0"
-                  max="100"
-                />
-                {discount && (
-                  <button
-                    onClick={() => setDiscount('')}
-                    className="h-12 px-3 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded-r-lg border border-l-0 text-gray-600 dark:text-gray-300 text-sm"
-                    title="Clear discount"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Add Button - 2 columns */}
-            <div className="col-span-2">
-              <button
-                onClick={addToCart}
-                className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-bold text-lg rounded-lg transition-colors duration-150 focus:ring-2 focus:ring-green-500 flex items-center justify-center gap-2"
-              >
-                ADD TO CART
-                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs font-mono">↵</kbd>
-              </button>
-            </div>
-
-            {/* Quick Clear - 2 columns */}
-            <div className="col-span-2">
-              <button
-                onClick={clearCart}
-                disabled={cart.length === 0}
-                className="w-full h-12 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-bold text-lg rounded-lg transition-colors duration-150 flex items-center justify-center gap-2"
-              >
-                CLEAR CART
-                <kbd className="px-1.5 py-0.5 bg-white/20 rounded text-xs font-mono">Ctrl+K</kbd>
-              </button>
-            </div>
-          </div>
-
-          {/* Product Preview */}
-          {productId && findProduct(productId) && (
-            <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-              <div className="flex justify-between items-center">
-                <div>
-                  <span className="font-semibold text-blue-900 dark:text-blue-100">
-                    {findProduct(productId).name}
-                  </span>
-                  <span className="ml-2 text-sm text-blue-700 dark:text-blue-300">
-                    (Stock: {findProduct(productId).available_quantity})
-                  </span>
-                </div>
-                <div className="text-right">
-                  {discount && parseFloat(discount) > 0 ? (
-                    <div>
-                      <span className="text-sm text-gray-500 dark:text-gray-300 line-through">
-                        LKR {getProductPrice(findProduct(productId)).toFixed(2)}
+                >
+                  <div className="font-bold text-white truncate">{product.name}</div>
+                  <div className="text-gray-400 text-xs mb-1">{product.sku}</div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-green-400 font-bold">LKR {getProductPrice(product).toFixed(2)}</span>
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={`text-xs px-2 py-1 rounded-none font-bold ${
+                        (product.outlet_available_quantity || product.available_quantity) > 10 
+                          ? 'bg-green-700 text-white'
+                          : (product.outlet_available_quantity || product.available_quantity) > 0
+                          ? 'bg-yellow-700 text-white'
+                          : 'bg-red-700 text-white'
+                      }`}>
+                        Stock: {product.outlet_available_quantity ?? product.available_quantity}
                       </span>
-                      <span className="ml-2 font-bold text-lg text-green-600 dark:text-green-400">
-                        LKR {(getProductPrice(findProduct(productId)) * (1 - parseFloat(discount) / 100)).toFixed(2)}
-                      </span>
-                      <div className="text-xs text-green-600 dark:text-green-400">
-                        {discount}% OFF
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="font-bold text-lg text-blue-900 dark:text-blue-100">
-                      LKR {getProductPrice(findProduct(productId)).toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Main Content Area */}
-        <div className="grid grid-cols-12 gap-4">
-          {/* Product Grid - 8 columns */}
-          <div className="col-span-8">
-            <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4 h-fit">
-              <div className="mb-4 space-y-3">
-                {/* Search and Sort Controls */}
-                <div className="flex gap-3 items-center">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      value={productSearch}
-                      onChange={(e) => setProductSearch(e.target.value)}
-                      className="w-full h-10 px-4 pr-16 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100"
-                      placeholder="Search products..."
-                    />
-                    <kbd className="absolute right-2 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded text-xs font-mono">
-                      Ctrl+/
-                    </kbd>
-                  </div>
-                  
-                  {/* Sort By Dropdown */}
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="h-10 px-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-black dark:border-gray-600 dark:text-gray-100 text-sm"
-                  >
-                    <option value="popularity">Popularity</option>
-                    <option value="name">Name</option>
-                    <option value="price">Price</option>
-                    <option value="stock">Stock</option>
-                    <option value="sku">SKU</option>
-                  </select>
-                  
-                  {/* Sort Order Toggle */}
-                  <button
-                    onClick={() => setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc')}
-                    className="h-10 px-4 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
-                    title={`Sort ${sortOrder === 'desc' ? 'Ascending' : 'Descending'}`}
-                  >
-                    {sortOrder === 'desc' ? (
-                      <>
-                        <span className="text-lg">↓</span>
-                        DESC
-                      </>
-                    ) : (
-                      <>
-                        <span className="text-lg">↑</span>
-                        ASC
-                      </>
-                    )}
-                  </button>
-                </div>
-                
-                {/* Sort Info */}
-                <div className="text-xs text-gray-600 dark:text-gray-300 flex justify-between items-center">
-                  <span>
-                    Showing {filteredProducts.length} products sorted by{' '}
-                    <span className="font-medium">
-                      {sortBy === 'popularity' ? 'Popularity' : 
-                       sortBy === 'name' ? 'Name' :
-                       sortBy === 'price' ? 'Price' :
-                       sortBy === 'stock' ? 'Stock' : 'SKU'}
-                    </span>
-                    {' '}({sortOrder === 'desc' ? 'High to Low' : 'Low to High'})
-                  </span>
-                  
-                  {/* Quick Sort Buttons */}
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => {setSortBy('popularity'); setSortOrder('desc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'popularity' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                      🔥 Hot
-                    </button>
-                    <button
-                      onClick={() => {setSortBy('price'); setSortOrder('asc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'price' && sortOrder === 'asc' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                      💰 Cheap
-                    </button>
-                    <button
-                      onClick={() => {setSortBy('name'); setSortOrder('asc')}}
-                      className={`px-2 py-1 text-xs rounded ${sortBy === 'name' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400' : 'hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    >
-                      🔤 A-Z
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-4 gap-3">
-                {filteredProducts.map((product, index) => {
-                  const isTopSeller = sortBy === 'popularity' && index < 3 && product.sold_quantity > 10;
-                  const isPopular = sortBy === 'popularity' && product.sold_quantity > 5;
-                  const isLowStock = product.available_quantity <= 5;
-                  const isExpensive = sortBy === 'price' && getProductPrice(product) > 50;
-                  
-                  return (
-                  <button
-                    key={product.id}
-                    data-product-index={index}
-                    onClick={() => {
-                      // Update selected index on click
-                      setSelectedProductIndex(index)
-                      
-                      // Check if product is already in cart
-                      const existingItemIndex = cart.findIndex(item => item.id === product.id)
-                      const qty = parseInt(quantity) || 1
-                      const productPrice = getProductPrice(product)
-                      const discountPercent = parseFloat(discount) || 0
-                      const discountAmount = (productPrice * discountPercent) / 100
-                      const finalPrice = productPrice - discountAmount
-
-                      if (product.available_quantity <= 0) {
-                        toast({
-                          title: "Out of stock",
-                          description: `${product.name} is currently out of stock`,
-                          variant: "destructive"
-                        })
-                        return
-                      }
-
-                      if (existingItemIndex >= 0) {
-                        // Product already in cart, increase quantity
-                        const existingItem = cart[existingItemIndex]
-                        const newQuantity = existingItem.quantity + qty
-                        
-                        if (newQuantity > product.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${product.available_quantity} units available. Current cart has ${existingItem.quantity}.`,
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        // Update existing item quantity
-                        setCart(prev => prev.map((item, index) => 
-                          index === existingItemIndex 
-                            ? { 
-                                ...item, 
-                                quantity: newQuantity, 
-                                total: finalPrice * newQuantity,
-                                discount: discountPercent, // Update discount if changed
-                                unitPrice: finalPrice // Update unit price if discount changed
-                              }
-                            : item
-                        ))
-
-                        toast({
-                          title: "Quantity updated",
-                          description: `${product.name} quantity increased to ${newQuantity}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
-                          duration: 1000
-                        })
-                      } else {
-                        // Product not in cart, add new item
-                        if (qty > product.available_quantity) {
-                          toast({
-                            title: "Insufficient stock",
-                            description: `Only ${product.available_quantity} units available`,
-                            variant: "destructive"
-                          })
-                          return
-                        }
-
-                        const cartItem = {
-                          id: product.id,
-                          sku: product.sku,
-                          name: product.name,
-                          originalPrice: productPrice,
-                          quantity: qty,
-                          discount: discountPercent,
-                          unitPrice: finalPrice,
-                          total: finalPrice * qty,
-                          availableStock: product.available_quantity
-                        }
-
-                        setCart(prev => [...prev, cartItem])
-
-                        toast({
-                          title: "Added to cart",
-                          description: `${product.name} × ${qty}${discountPercent > 0 ? ` (${discountPercent}% off)` : ''}`,
-                          duration: 1000
-                        })
-                      }
-
-                      setQuantity('1')
-                      // Don't clear discount automatically - let user keep it for multiple items
-                    }}
-                    className={`p-3 hover:shadow-md rounded-lg border-2 text-left transition-all duration-150 transform hover:scale-105 relative ${
-                      // Keyboard navigation highlight
-                      index === selectedProductIndex
-                        ? 'ring-4 ring-blue-500 ring-offset-2 dark:ring-offset-black scale-105 shadow-xl'
-                        : ''
-                    } ${
-                      isTopSeller 
-                        ? 'bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20 border-orange-300 dark:border-orange-700 shadow-md'
-                        : isPopular && sortBy === 'popularity'
-                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700'
-                        : isLowStock && sortBy === 'stock'
-                        ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700'
-                        : isExpensive && sortBy === 'price'
-                        ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-700'
-                        : 'bg-gray-50 dark:bg-black border-gray-200 dark:border-gray-600'
-                    } hover:bg-blue-50 dark:hover:bg-blue-900/20`}
-                  >
-                    {/* Dynamic Badge based on sort type */}
-                    {sortBy === 'popularity' && isTopSeller && (
-                      <div className="absolute -top-2 -right-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg">
-                        🔥 HOT
-                      </div>
-                    )}
-                    
-                    {sortBy === 'popularity' && product.sold_quantity > 0 && !isTopSeller && (
-                      <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                        {product.sold_quantity}
-                      </div>
-                    )}
-                    
-                    {sortBy === 'stock' && isLowStock && (
-                      <div className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full font-bold animate-pulse">
-                        LOW
-                      </div>
-                    )}
-                    
-                    {sortBy === 'price' && isExpensive && (
-                      <div className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                        💎
-                      </div>
-                    )}
-                    
-                    {sortBy === 'name' && index < 3 && (
-                      <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-                        #{index + 1}
-                      </div>
-                    )}
-                    
-                    <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 mb-1 truncate" title={product.name}>
-                      {product.name}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-300 mb-1 font-mono">
-                      {product.sku}
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div className="text-left">
-                        {discount && parseFloat(discount) > 0 ? (
-                          <div>
-                            <span className="text-xs text-gray-500 dark:text-gray-300 line-through">
-                              LKR {getProductPrice(product).toFixed(2)}
-                            </span>
-                            <div className="font-bold text-green-600 dark:text-green-400">
-                              LKR {(getProductPrice(product) * (1 - parseFloat(discount) / 100)).toFixed(2)}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="font-bold text-green-600 dark:text-green-400">
-                            LKR {getProductPrice(product).toFixed(2)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        {discount && parseFloat(discount) > 0 && (
-                          <div className="text-xs bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400 px-1 py-0.5 rounded mb-1">
-                            {discount}% OFF
-                          </div>
-                        )}
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          product.available_quantity > 10 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                            : product.available_quantity > 0
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
-                        }`}>
-                          {product.available_quantity}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Cart & Checkout - 4 columns */}
-          <div className="col-span-4">
-            <div className="bg-white dark:bg-black rounded-lg shadow-sm border dark:border-gray-800 p-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                Cart ({cart.length} items)
-              </h3>
-
-              {/* Cart Items */}
-              <div className="max-h-64 overflow-y-auto mb-4">
-                {cart.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-300">
-                    Cart is empty
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {cart.map((item, index) => (
-                      <div key={index} className="p-3 bg-gray-50 dark:bg-black rounded-lg border border-gray-200 dark:border-gray-600">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1">
-                            <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate" title={item.name}>
-                              {item.name}
-                            </div>
-                            <div className="text-xs text-gray-600 dark:text-gray-300 font-mono">
-                              {item.sku} • LKR {item.unitPrice.toFixed(2)} each
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => removeFromCart(index)}
-                            className="ml-2 w-6 h-6 bg-red-100 hover:bg-red-200 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold transition-colors"
-                          >
-                            ×
-                          </button>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => updateQuantity(index, item.quantity - 1)}
-                              className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
-                            >
-                              −
-                            </button>
-                            <input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => updateQuantity(index, parseInt(e.target.value) || 1)}
-                              className="w-12 h-7 text-center text-sm font-mono bg-white dark:bg-black border border-gray-300 dark:border-gray-600 rounded"
-                              min="1"
-                              max={item.availableStock}
-                            />
-                            <button
-                              onClick={() => updateQuantity(index, item.quantity + 1)}
-                              className="w-7 h-7 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-sm font-bold transition-colors"
-                            >
-                              +
-                            </button>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold text-green-600 dark:text-green-400">
-                              LKR {item.total.toFixed(2)}
-                            </div>
-                            {item.discount > 0 && (
-                              <div className="text-xs text-gray-500 dark:text-gray-300">
-                                {item.discount}% off
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Totals */}
-              {cart.length > 0 && (
-                <div className="border-t dark:border-gray-600 pt-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-lg">
-                      <span className="font-semibold">Subtotal:</span>
-                      <span className="font-bold">LKR {subtotal.toFixed(2)}</span>
-                    </div>
-                    
-                    {/* Bill Discount Input */}
-                    <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                      <label className="text-sm font-semibold text-orange-700 dark:text-orange-300 whitespace-nowrap">
-                        Bill Discount:
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={billDiscount}
-                        onChange={(e) => setBillDiscount(e.target.value)}
-                        placeholder="0"
-                        className="w-20 px-2 py-1 text-sm border border-orange-300 dark:border-orange-700 rounded focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-gray-800"
-                      />
-                      <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">%</span>
-                      {billDiscountAmount > 0 && (
-                        <span className="ml-auto text-sm font-bold text-orange-600 dark:text-orange-400">
-                          -LKR {billDiscountAmount.toFixed(2)}
+                      {product.total_available_quantity && (
+                        <span className="text-xs px-1 text-gray-400 truncate">
+                          WH: {product.total_available_quantity}
                         </span>
                       )}
                     </div>
-                    
-                    <div className="border-t dark:border-gray-600 pt-2">
-                      <div className="flex justify-between text-2xl font-bold text-green-600 dark:text-green-400">
-                        <span>TOTAL:</span>
-                        <span>LKR {total.toFixed(2)}</span>
-                      </div>
-                    </div>
                   </div>
+                </button>
+              ))}
+            </div>
+          </div>
 
+          {/* Discount Section - Compact */}
+          <div className="bg-gray-900 border-t-2 border-gray-700 px-3 py-2 border-b-2">
+            <div className="flex items-center gap-4">
+              {/* Item Discount */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-yellow-400 font-bold">Item:</span>
+                {/* Mode Toggle */}
+                <div className="flex gap-1 border-2 border-yellow-700 rounded-none">
                   <button
-                    onClick={initiatePayment}
-                    disabled={isLoading}
-                    className="w-full mt-4 h-16 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold text-xl rounded-lg transition-all duration-150 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none disabled:shadow-none flex items-center justify-center gap-3"
+                    onClick={() => {
+                      setItemDiscountType('percentage')
+                      setDiscountByPrice('')
+                    }}
+                    className={`px-2 h-7 text-xs font-bold border-r-2 border-yellow-700 ${itemDiscountType === 'percentage' ? 'bg-yellow-600 text-white' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}
                   >
-                    {isLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-                        PROCESSING...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle className="h-6 w-6" />
-                        COMPLETE SALE (F2)
-                      </>
-                    )}
+                    %
+                  </button>
+                  <button
+                    onClick={() => {
+                      setItemDiscountType('price')
+                      setDiscount('')
+                    }}
+                    className={`px-2 h-7 text-xs font-bold ${itemDiscountType === 'price' ? 'bg-yellow-600 text-white' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}
+                  >
+                    PKR
                   </button>
                 </div>
+                
+                {/* Input based on mode */}
+                {discountMode === 'item' ? (
+                  <input type="text" value={discountInputValue} readOnly className="w-16 h-9 px-2 text-sm font-bold bg-blue-950 text-white border-2 border-blue-600 rounded-none text-center" />
+                ) : itemDiscountType === 'percentage' ? (
+                  <>
+                    <input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500 rounded-none text-center" placeholder="0" />
+                    <span className="text-sm text-gray-400">%</span>
+                    {[5, 10, 15, 20].map((pct) => (
+                      <button key={`item-${pct}`} onClick={() => setDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${discount === pct.toString() ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-yellow-800 hover:bg-yellow-700 border-yellow-900 text-yellow-100'}`}>{pct}%</button>
+                    ))}
+                    {discount && parseFloat(discount) > 0 && <button onClick={() => setDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+                  </>
+                ) : (
+                  <>
+                    <input type="number" min="0" step="0.01" value={discountByPrice} onChange={(e) => setDiscountByPrice(e.target.value)} className="w-24 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500 rounded-none text-center" placeholder="Discount amount" />
+                    <span className="text-sm text-gray-400">PKR</span>
+                    {discountByPrice && parseFloat(discountByPrice) > 0 && <button onClick={() => setDiscountByPrice('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+                  </>
+                )}
+              </div>
+              
+              <div className="w-px h-9 bg-gray-600"></div>
+              
+              {/* Bill Discount */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-orange-400 font-bold">Bill:</span>
+                {/* Mode Toggle */}
+                <div className="flex gap-1 border-2 border-orange-700 rounded-none">
+                  <button
+                    onClick={() => {
+                      setBillDiscountType('percentage')
+                      setBillDiscountByPrice('')
+                    }}
+                    className={`px-2 h-7 text-xs font-bold border-r-2 border-orange-700 ${billDiscountType === 'percentage' ? 'bg-orange-600 text-white' : 'bg-orange-900 text-orange-100 hover:bg-orange-800'}`}
+                  >
+                    %
+                  </button>
+                  <button
+                    onClick={() => {
+                      setBillDiscountType('price')
+                      setBillDiscount('')
+                    }}
+                    className={`px-2 h-7 text-xs font-bold ${billDiscountType === 'price' ? 'bg-orange-600 text-white' : 'bg-orange-900 text-orange-100 hover:bg-orange-800'}`}
+                  >
+                    PKR
+                  </button>
+                </div>
+                
+                {/* Input based on mode */}
+                {discountMode === 'bill' ? (
+                  <input type="text" value={discountInputValue} readOnly className="w-16 h-9 px-2 text-sm font-bold bg-blue-950 text-white border-2 border-blue-600 rounded-none text-center" />
+                ) : billDiscountType === 'percentage' ? (
+                  <>
+                    <input type="number" min="0" max="100" value={billDiscount} onChange={(e) => setBillDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-orange-500 rounded-none text-center" placeholder="0" />
+                    <span className="text-sm text-gray-400">%</span>
+                    {[5, 10, 15, 20].map((pct) => (
+                      <button key={`bill-${pct}`} onClick={() => setBillDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${billDiscount === pct.toString() ? 'bg-orange-600 border-orange-400 text-white' : 'bg-orange-800 hover:bg-orange-700 border-orange-900 text-orange-100'}`}>{pct}%</button>
+                    ))}
+                    {billDiscount && parseFloat(billDiscount) > 0 && <button onClick={() => setBillDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+                  </>
+                ) : (
+                  <>
+                    <input type="number" min="0" step="0.01" value={billDiscountByPrice} onChange={(e) => setBillDiscountByPrice(e.target.value)} className="w-24 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-orange-500 rounded-none text-center" placeholder="Discount amount" />
+                    <span className="text-sm text-gray-400">PKR</span>
+                    {billDiscountByPrice && parseFloat(billDiscountByPrice) > 0 && <button onClick={() => setBillDiscountByPrice('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          {/* <div className="bg-gray-900 border-t-2 border-gray-700 p-2 grid grid-cols-3 gap-1">
+            <button
+              onClick={() => setShowReturnModal(true)}
+              className="bg-red-700 hover:bg-red-800 text-white font-bold py-2 px-2 rounded-none border-2 border-red-900 text-sm"
+            >
+              RETURNS
+            </button>
+            <button
+              onClick={clearCart}
+              disabled={cart.length === 0}
+              className="bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-bold py-2 px-2 rounded-none border-2 border-gray-800 text-sm"
+            >
+              CLEAR CART
+            </button>
+            <button
+              onClick={() => {
+                document.querySelector('input[placeholder="SCAN/TYPE PRODUCT..."]')?.focus()
+              }}
+              className="bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-2 rounded-none border-2 border-blue-900 text-sm"
+            >
+              NEW ITEM
+            </button>
+          </div> */}
+        </div>
+
+        {/* Right Side - Cart & Keypad - Half Screen Width */}
+        <div className="w-7/16 flex flex-col bg-gray-900 border-r-2 border-gray-700">
+          {/* Cart Display - Enhanced Size */}
+          <div className="flex-1 overflow-y-auto bg-black p-2 border-b-2 border-gray-700">
+            <div className="text-white font-bold text-base mb-3">CART ({cart.length})</div>
+            <div className="space-y-2">
+              {cart.map((item, index) => (
+                <div 
+                  key={index} 
+                  onClick={() => {
+                    setSelectedCartIndex(index)
+                    setCartInputQty(item.quantity.toString())
+                  }}
+                  className={`border-2 p-3 rounded-none cursor-pointer transition-all ${
+                    selectedCartIndex === index
+                      ? 'bg-blue-900 border-blue-500 ring-2 ring-blue-400'
+                      : 'bg-gray-800 border-gray-700 hover:border-gray-500'
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-white text-sm truncate" title={item.name}>{item.name}</div>
+                      <div className="text-gray-400 text-sm font-mono">{item.sku}</div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeFromCart(index)
+                        if (selectedCartIndex === index) {
+                          setSelectedCartIndex(null)
+                          setCartInputQty('')
+                        }
+                      }}
+                      className="w-7 h-7 bg-red-700 hover:bg-red-800 text-white rounded-none flex items-center justify-center text-lg font-bold ml-2 flex-shrink-0"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-center mb-2 text-sm font-bold">
+                    <span className="text-gray-300">{selectedCartIndex === index ? 'NEW QTY:' : `Qty: ${item.quantity}`}</span>
+                    <span className="text-green-400 text-base">LKR {item.total.toFixed(2)}</span>
+                  </div>
+                  {selectedCartIndex === index && (
+                    <div className="pt-2 border-t border-blue-700 text-center space-y-1">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={cartInputQty}
+                        onChange={(e) => setCartInputQty(e.target.value)}
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            const newQty = parseFloat(cartInputQty) || 1
+                            if (newQty > 0) {
+                              updateQuantity(selectedCartIndex, newQty)
+                              setSelectedCartIndex(null)
+                              setCartInputQty('')
+                            }
+                          }
+                        }}
+                        className="quantity-input w-full text-center text-white font-bold text-lg bg-blue-950 p-2 border-2 border-blue-600 focus:border-blue-400 rounded-none"
+                        autoFocus
+                      />
+                      <div className="text-xs text-blue-300 font-bold">Type quantity and press Enter, or use keypad</div>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {cart.length === 0 && (
+                <div className="text-center text-gray-500 py-8 text-sm">No items in cart</div>
               )}
             </div>
+          </div>
+
+          {/* Totals & Checkout - Enhanced Size */}
+          <div className="bg-black border-b-2 border-gray-700 p-3 space-y-2">
+            <div className="flex justify-between text-white font-bold text-base">
+              <span>SUBTOTAL:</span>
+              <span>LKR {subtotal.toFixed(2)}</span>
+            </div>
+            {((discount && parseFloat(discount) > 0) || (discountByPrice && parseFloat(discountByPrice) > 0)) && (
+              <div className="flex justify-between text-yellow-400 font-bold text-sm">
+                <span>
+                  Item Discount (
+                  {itemDiscountType === 'percentage' 
+                    ? `${discount}%` 
+                    : `PKR ${discountByPrice}`
+                  }):
+                </span>
+                <span>-LKR {cart.reduce((sum, item) => {
+                  if (itemDiscountType === 'price' && discountByPrice) {
+                    // PKR mode: multiply PKR discount by quantity
+                    return sum + (parseFloat(discountByPrice) * item.quantity)
+                  } else {
+                    // Percentage mode: calculate from original price
+                    const itemDiscountPercent = parseFloat(item.discount) || 0
+                    return sum + ((item.originalPrice * itemDiscountPercent) / 100) * item.quantity
+                  }
+                }, 0).toFixed(2)}</span>
+              </div>
+            )}
+            {billDiscountAmount > 0 && (
+              <div className="flex justify-between text-orange-400 font-bold text-base">
+                <span>
+                  Bill Discount (
+                  {billDiscountType === 'percentage' 
+                    ? `${billDiscount}%` 
+                    : `PKR ${billDiscountByPrice}`
+                  }):
+                </span>
+                <span>-LKR {billDiscountAmount.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="border-t border-gray-700 pt-2 flex justify-between text-green-400 font-bold text-2xl">
+              <span>TOTAL:</span>
+              <span>LKR {total.toFixed(2)}</span>
+            </div>
+          </div>
+
+          {/* Virtual Keyboard */}
+          <VirtualKeyboard
+            isCartMode={selectedCartIndex !== null}
+            isDiscountMode={discountMode !== null}
+            discountModeType={discountMode}
+            onKeyPress={(key) => {
+              if (discountMode) {
+                // In discount mode, only accept numbers
+                if (!isNaN(key)) {
+                  setDiscountInputValue(prev => prev + key)
+                }
+              } else if (selectedCartIndex !== null) {
+                setCartInputQty(prev => prev + key)
+              } else {
+                setProductId(prev => prev + key)
+                setProductSearch(prev => prev + key)
+              }
+            }}
+            onDelete={() => {
+              if (discountMode) {
+                setDiscountInputValue(prev => prev.slice(0, -1))
+              } else if (selectedCartIndex !== null) {
+                setCartInputQty(prev => prev.slice(0, -1))
+              } else {
+                setProductId(prev => prev.slice(0, -1))
+                setProductSearch(prev => prev.slice(0, -1))
+              }
+            }}
+            onClear={() => {
+              if (discountMode) {
+                setDiscountInputValue('')
+              } else if (selectedCartIndex !== null) {
+                setCartInputQty('')
+              } else {
+                setProductId('')
+                setProductSearch('')
+              }
+            }}
+            onClearCart={clearCart}
+            onAdd={() => {
+              if (discountMode) {
+                // Apply discount
+                const discountValue = parseFloat(discountInputValue) || 0
+                if (discountMode === 'item') {
+                  setDiscount(discountValue.toString())
+                  toast({
+                    title: "Item Discount Applied",
+                    description: `${discountValue}% discount set`,
+                    duration: 800
+                  })
+                } else if (discountMode === 'bill') {
+                  setBillDiscount(discountValue.toString())
+                  toast({
+                    title: "Bill Discount Applied",
+                    description: `${discountValue}% discount set`,
+                    duration: 800
+                  })
+                }
+                setDiscountMode(null)
+                setDiscountInputValue('')
+              } else if (selectedCartIndex !== null) {
+                const newQty = parseFloat(cartInputQty) || 1
+                if (newQty > 0) {
+                  updateQuantity(selectedCartIndex, newQty)
+                  setSelectedCartIndex(null)
+                  setCartInputQty('')
+                }
+              } else {
+                addToCart()
+              }
+            }}
+            onEnter={() => {
+              if (discountMode) {
+                // Apply discount and close
+                const discountValue = parseFloat(discountInputValue) || 0
+                if (discountMode === 'item') {
+                  setDiscount(discountValue.toString())
+                } else if (discountMode === 'bill') {
+                  setBillDiscount(discountValue.toString())
+                }
+                setDiscountMode(null)
+                setDiscountInputValue('')
+              } else if (selectedCartIndex !== null) {
+                const newQty = parseFloat(cartInputQty) || 1
+                if (newQty > 0) {
+                  updateQuantity(selectedCartIndex, newQty)
+                  setSelectedCartIndex(null)
+                  setCartInputQty('')
+                }
+              } else if (cart.length > 0) {
+                initiatePayment()
+              }
+            }}
+          />
+
+          {/* Status Bar - Show selected item or ready to checkout */}
+          <div className="bg-black border-t-2 border-gray-700 p-2">
+            {selectedCartIndex !== null ? (
+              <div className="text-center space-y-1 py-1">
+                <div className="text-yellow-400 font-bold text-base">EDIT QUANTITY MODE</div>
+                <div className="text-xs text-yellow-300">Use keyboard to type • Press ADD or ENT to apply</div>
+              </div>
+            ) : cart.length > 0 ? (
+              <div className="text-center space-y-1 py-1">
+                <div className="text-green-400 font-bold text-base">READY TO PAY</div>
+                <div className="text-xs text-green-300">Click item to edit qty • Press ENT to complete</div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 font-bold text-sm">
+                Scan product to start
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1446,11 +1800,57 @@ export default function POSSystem() {
         onVariationSelect={handleVariationSelect}
       />
 
+      {/* Product Quantity Modal */}
+      <ProductQuantityModal
+        isOpen={showProductQuantityModal}
+        onClose={() => {
+          setShowProductQuantityModal(false)
+          setSelectedProductForQuantity(null)
+        }}
+        product={selectedProductForQuantity}
+        onAddToCart={handleQuantityModalAddToCart}
+        productPrice={selectedProductForQuantity ? getProductPrice(selectedProductForQuantity) : 0}
+      />
+
+      {/* Create Customer Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-950 rounded-lg max-w-2xl w-full mx-4">
+            <CustomerFormModal
+              onSuccess={() => {
+                setShowCustomerModal(false)
+                toast({
+                  title: "Success",
+                  description: "Customer created successfully",
+                })
+              }}
+              onCancel={() => setShowCustomerModal(false)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Returns Modal */}
       <POSReturnModal
         isOpen={showReturnModal}
         onClose={() => setShowReturnModal(false)}
         onSuccess={handleReturnSuccess}
+      />
+
+      {/* Insufficient Stock Warning Modal */}
+      <InsufficientStockWarning
+        isOpen={showStockWarning}
+        onClose={() => {
+          setShowStockWarning(false)
+          setStockWarningData(null)
+          setSelectedCartIndex(null)
+          setCartInputQty('')
+        }}
+        onConfirm={handleStockWarningConfirm}
+        productName={stockWarningData?.productName}
+        availableQuantity={stockWarningData?.availableQuantity}
+        requestedQuantity={stockWarningData?.requestedQuantity}
+        currentCartQuantity={stockWarningData?.currentCartQuantity}
       />
     </div>
   )

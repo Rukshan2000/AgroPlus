@@ -28,7 +28,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
         {/* Logo */}
         <div style={{ marginBottom: '3mm', display: 'flex', justifyContent: 'center' }}>
           <img
-            src={`${process.env.NEXT_PUBLIC_APP_URL || ''}/assets/logo.png`}
+            src="/assets/logo.png"
             alt="Green Plus Agro"
             style={{
               width: '40mm',
@@ -38,12 +38,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
               display: 'block'
             }}
             onError={(e) => {
-              console.error('Logo failed to load:', e.target.src)
-              // Try without NEXT_PUBLIC_APP_URL if it failed with it
-              if (process.env.NEXT_PUBLIC_APP_URL && e.target.src.startsWith(process.env.NEXT_PUBLIC_APP_URL)) {
-                e.target.src = '/assets/logo.png'
-                return
-              }
+              // Silently hide the logo if it fails to load
               e.target.style.display = 'none'
             }}
           />
@@ -72,7 +67,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>Time:</span>
-          <span>{currentDate.toLocaleTimeString()}</span>
+          <span suppressHydrationWarning>{currentDate.toLocaleTimeString()}</span>
         </div>
       </div>
 

@@ -67,15 +67,19 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
       const endDateStr = endDate.toISOString();
       
       const response = await fetch(
-        `/api/sales?limit=100&page=1&start_date=${startDateStr}&end_date=${endDateStr}`
+        `/api/sales?limit=1000&page=1&start_date=${startDateStr}&end_date=${endDateStr}`
       );
       const data = await response.json();
       if (response.ok) {
-        setRecentSales(data.sales || []);
-        if (!data.sales || data.sales.length === 0) {
+        // Filter out non-returnable sales
+        const returnableSales = (data.sales || []).filter(sale => sale.return !== false);
+        console.log('Loaded sales:', { total: data.sales?.length, returnable: returnableSales.length, data: returnableSales });
+        setRecentSales(returnableSales);
+        
+        if (!returnableSales || returnableSales.length === 0) {
           toast({
             title: "No Sales Found",
-            description: "There are no sales from the last 7 days to process returns for.",
+            description: "There are no returnable sales from the last 7 days to process returns for.",
             variant: "default",
           });
         }
@@ -152,7 +156,8 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
         body: JSON.stringify({
           sale_id: selectedSale.id,
           product_id: selectedSale.product_id,
-          quantity_returned: parseInt(formData.quantity_returned),
+          outlet_id: selectedSale.outlet_id, // Include outlet_id to update product_distribution
+          quantity_returned: parseFloat(formData.quantity_returned),
           return_reason: formData.return_reason,
           restocked: formData.restocked,
         }),
@@ -166,7 +171,7 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
 
       toast({
         title: "Return Processed",
-        description: `Successfully processed return. Refund: LKR ${data.refund_amount.toFixed(2)}`,
+        description: `Successfully processed return. Refund: LKR ${data.refund_amount.toFixed(2)}${formData.restocked ? ' • Inventory updated' : ''}`,
       });
 
       onSuccess?.();
@@ -188,14 +193,24 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
     return pricePerUnit * formData.quantity_returned;
   };
 
-  const filteredSales = saleSearch
-    ? recentSales.filter(
-        (sale) =>
-          sale.id.toString().includes(saleSearch) ||
-          sale.product_name?.toLowerCase().includes(saleSearch.toLowerCase()) ||
-          sale.sku?.toLowerCase().includes(saleSearch.toLowerCase())
-      )
-    : recentSales.slice(0, 10);
+  const filteredSales = (() => {
+    // recentSales is already filtered for returnable items in loadRecentSales
+    if (!saleSearch || saleSearch.trim() === '') {
+      return recentSales.slice(0, 10);
+    }
+    
+    const searchLower = saleSearch.toLowerCase();
+    const results = recentSales.filter((sale) => {
+      const idMatch = sale.id?.toString().includes(saleSearch);
+      const productNameMatch = sale.product_name?.toLowerCase().includes(searchLower);
+      const skuMatch = sale.sku?.toLowerCase().includes(searchLower);
+      
+      return idMatch || productNameMatch || skuMatch;
+    });
+    
+    console.log('Search results:', { saleSearch, totalSales: recentSales.length, filtered: results.length, results });
+    return results;
+  })();
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -266,6 +281,8 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
                             <Badge variant="destructive">Fully Returned</Badge>
                           ) : sale.return_status === "partial" ? (
                             <Badge variant="secondary">Partially Returned</Badge>
+                          ) : sale.return === false ? (
+                            <Badge variant="destructive">Not Returnable</Badge>
                           ) : (
                             <Badge variant="outline">Available</Badge>
                           )}
@@ -275,7 +292,8 @@ export default function POSReturnModal({ isOpen, onClose, onSuccess }) {
                             size="sm"
                             variant="outline"
                             onClick={() => handleSelectSale(sale)}
-                            disabled={sale.return_status === "full"}
+                            disabled={sale.return_status === "full" || sale.return === false}
+                            title={sale.return === false ? "This product is not available for return" : ""}
                           >
                             Select
                           </Button>

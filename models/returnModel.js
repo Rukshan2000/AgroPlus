@@ -12,24 +12,29 @@ export async function createReturn({
   return_reason,
   refund_amount,
   restocked = true,
-  processed_by
+  processed_by,
+  outlet_id = null
 }) {
   const client = await query('BEGIN');
   
   try {
+    // Ensure quantities are integers
+    const qty = parseInt(quantity_returned) || 0;
+    const origQty = parseInt(original_quantity) || 0;
+    
     // Create return record
     const returnResult = await query(`
       INSERT INTO product_returns (
         sale_id, product_id, product_name, quantity_returned,
         original_quantity, return_reason, refund_amount,
-        restocked, processed_by
+        restocked, processed_by, outlet_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `, [
-      sale_id, product_id, product_name, quantity_returned,
-      original_quantity, return_reason, refund_amount,
-      restocked, processed_by
+      sale_id, product_id, product_name, qty,
+      origQty, return_reason, refund_amount,
+      restocked, processed_by, outlet_id
     ]);
 
     // Update product stock if restocked
@@ -41,7 +46,18 @@ export async function createReturn({
           sold_quantity = GREATEST(0, sold_quantity - $1),
           updated_at = NOW()
         WHERE id = $2
-      `, [quantity_returned, product_id]);
+      `, [qty, product_id]);
+
+      // Update product_distribute available_quantity if outlet_id is available
+      if (outlet_id) {
+        await query(`
+          UPDATE product_distribute 
+          SET 
+            available_quantity = available_quantity + $1,
+            updated_at = NOW()
+          WHERE product_id = $2 AND outlet_id = $3
+        `, [qty, product_id, outlet_id]);
+      }
     }
 
     // Get the sale item details to update profit
@@ -52,20 +68,20 @@ export async function createReturn({
     `, [sale_id, product_id]);
 
     if (saleItemResult.rows.length > 0) {
-      const profitPerUnit = saleItemResult.rows[0].profit_per_unit || 0;
+      const profitPerUnit = parseFloat(saleItemResult.rows[0].profit_per_unit) || 0;
       
       // Update sales table profit (reduce profit for returned items)
       await query(`
         UPDATE sales 
         SET 
-          total_profit = GREATEST(0, total_profit - ($1 * $2)),
+          total_profit = GREATEST(0, total_profit - (CAST($1 AS DECIMAL) * CAST($2 AS DECIMAL))),
           updated_at = NOW()
         WHERE id = $3
-      `, [quantity_returned, profitPerUnit, sale_id]);
+      `, [qty, profitPerUnit, sale_id]);
     }
 
     // Update sale return status
-    const returnStatus = quantity_returned >= original_quantity ? 'full' : 'partial';
+    const returnStatus = qty >= origQty ? 'full' : 'partial';
     await query(`
       UPDATE sales 
       SET return_status = $1 
@@ -131,7 +147,7 @@ export async function getReturnsBySale(sale_id) {
 /**
  * List all returns with pagination and filters
  */
-export async function listReturns({ page = 1, limit = 10, start_date, end_date } = {}) {
+export async function listReturns({ page = 1, limit = 10, start_date, end_date, outlet_id } = {}) {
   const offset = (page - 1) * limit;
   let whereConditions = [];
   let params = [];
@@ -149,6 +165,12 @@ export async function listReturns({ page = 1, limit = 10, start_date, end_date }
     paramIndex++;
   }
 
+  if (outlet_id) {
+    whereConditions.push(`r.outlet_id = $${paramIndex}`);
+    params.push(outlet_id);
+    paramIndex++;
+  }
+
   const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
   const result = await query(`
@@ -157,7 +179,7 @@ export async function listReturns({ page = 1, limit = 10, start_date, end_date }
       s.total_amount as original_sale_amount,
       s.payment_method,
       u.name as processed_by_name,
-      c.name as customer_name,
+      CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, '')) as customer_name,
       c.phone as customer_phone
     FROM product_returns r
     LEFT JOIN sales s ON r.sale_id = s.id
@@ -186,7 +208,15 @@ export async function listReturns({ page = 1, limit = 10, start_date, end_date }
 /**
  * Get return statistics
  */
-export async function getReturnStats(days = 30) {
+export async function getReturnStats(days = 30, outlet_id = null) {
+  let whereClause = `WHERE return_date >= CURRENT_DATE - INTERVAL '${days} days'`;
+  let params = [];
+  
+  if (outlet_id) {
+    whereClause += ` AND outlet_id = $1`;
+    params.push(outlet_id);
+  }
+
   const result = await query(`
     SELECT 
       COUNT(*) as total_returns,
@@ -195,20 +225,21 @@ export async function getReturnStats(days = 30) {
       AVG(refund_amount) as avg_refund_amount,
       COUNT(DISTINCT sale_id) as unique_sales_returned
     FROM product_returns
-    WHERE return_date >= CURRENT_DATE - INTERVAL '${days} days'
-  `);
+    ${whereClause}
+  `, params);
   
+  let topReasonsParams = params;
   const topReasonsResult = await query(`
     SELECT 
       return_reason,
       COUNT(*) as count,
       SUM(refund_amount) as total_refund
     FROM product_returns
-    WHERE return_date >= CURRENT_DATE - INTERVAL '${days} days'
+    ${whereClause}
     GROUP BY return_reason
     ORDER BY count DESC
     LIMIT 5
-  `);
+  `, topReasonsParams);
 
   return {
     ...result.rows[0],
@@ -226,7 +257,7 @@ export async function getReturnById(id) {
       s.total_amount as original_sale_amount,
       s.payment_method,
       u.name as processed_by_name,
-      c.name as customer_name,
+      CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, '')) as customer_name,
       c.phone as customer_phone
     FROM product_returns r
     LEFT JOIN sales s ON r.sale_id = s.id
@@ -249,11 +280,12 @@ export async function checkReturnEligibility(sale_id, product_id) {
       s.product_name,
       s.created_at,
       s.return_status,
+      s.outlet_id,
       COALESCE(SUM(r.quantity_returned), 0) as already_returned
     FROM sales s
     LEFT JOIN product_returns r ON r.sale_id = s.id AND r.product_id = s.product_id
     WHERE s.id = $1 AND s.product_id = $2
-    GROUP BY s.id, s.quantity, s.total_amount, s.product_name, s.created_at, s.return_status
+    GROUP BY s.id, s.quantity, s.total_amount, s.product_name, s.created_at, s.return_status, s.outlet_id
   `, [sale_id, product_id]);
 
   if (saleResult.rows.length === 0) {

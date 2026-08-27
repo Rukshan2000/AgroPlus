@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getSession } from "../../../lib/auth"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { UserBarcodeSection } from "@/components/user-barcode-section"
 
 export default async function ProfilePage() {
   const session = await getSession()
@@ -8,7 +9,7 @@ export default async function ProfilePage() {
 
   const { user } = session
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-2xl space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Profile</CardTitle>
@@ -28,6 +29,8 @@ export default async function ProfilePage() {
           </div>
         </CardContent>
       </Card>
+
+      <UserBarcodeSection user={user} />
     </div>
   )
 }

@@ -12,14 +12,17 @@ import { getSaleById } from '../models/salesModel.js';
  * Process a product return
  */
 export async function processReturn(data, userId) {
-  const { sale_id, product_id, quantity_returned, return_reason, restocked = true } = data;
+  const { sale_id, product_id, outlet_id, quantity_returned, return_reason, restocked = true } = data;
 
   // Validate input
   if (!sale_id || !product_id || !quantity_returned) {
     throw new Error('Missing required fields: sale_id, product_id, quantity_returned');
   }
 
-  if (quantity_returned <= 0) {
+  // Convert to number if string (handle both integer and decimal values)
+  const qty = typeof quantity_returned === 'string' ? parseFloat(quantity_returned) : quantity_returned;
+  
+  if (qty <= 0) {
     throw new Error('Quantity returned must be greater than 0');
   }
 
@@ -30,26 +33,30 @@ export async function processReturn(data, userId) {
     throw new Error(eligibility.reason);
   }
 
-  if (quantity_returned > eligibility.remainingQuantity) {
+  if (qty > eligibility.remainingQuantity) {
     throw new Error(
-      `Cannot return ${quantity_returned} items. Maximum returnable quantity is ${eligibility.remainingQuantity}`
+      `Cannot return ${qty} items. Maximum returnable quantity is ${eligibility.remainingQuantity}`
     );
   }
 
   // Calculate refund amount (proportional to quantity)
-  const refund_amount = (eligibility.sale.total_amount / eligibility.sale.quantity) * quantity_returned;
+  const refund_amount = (eligibility.sale.total_amount / eligibility.sale.quantity) * qty;
 
-  // Create the return
+  // Get outlet_id from sale if not provided
+  const finalOutletId = outlet_id || eligibility.sale.outlet_id;
+
+  // Create the return with outlet_id from the original sale
   const returnRecord = await createReturn({
     sale_id,
     product_id,
     product_name: eligibility.sale.product_name,
-    quantity_returned,
+    quantity_returned: qty,
     original_quantity: eligibility.sale.quantity,
     return_reason: return_reason || 'No reason provided',
     refund_amount,
     restocked,
-    processed_by: userId
+    processed_by: userId,
+    outlet_id: finalOutletId
   });
 
   return {
@@ -69,8 +76,8 @@ export async function getAllReturns(filters = {}) {
 /**
  * Get return statistics
  */
-export async function getStatistics(days = 30) {
-  return await getReturnStats(days);
+export async function getStatistics(days = 30, outlet_id = null) {
+  return await getReturnStats(days, outlet_id);
 }
 
 /**

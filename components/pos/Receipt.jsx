@@ -34,7 +34,7 @@ export default function Receipt({
           {saleId && (
             <p className="text-xs mt-1">Sale ID: <span className="font-mono font-bold">{saleId}</span></p>
           )}
-          <p>{new Date().toLocaleString()}</p>
+          <p suppressHydrationWarning>{new Date().toLocaleString()}</p>
         </div>
         
         {/* Scrollable items area */}

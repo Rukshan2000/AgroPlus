@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -39,6 +39,23 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const [bulkBarcodeModalOpen, setBulkBarcodeModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState(null)
 
+  // Load all products on mount
+  useEffect(() => {
+    const loadAllProducts = async () => {
+      try {
+        const response = await fetch("/api/products?limit=10000")
+        if (response.ok) {
+          const data = await response.json()
+          setProducts(data.products || [])
+        }
+      } catch (error) {
+        console.error("Failed to load products:", error)
+      }
+    }
+
+    loadAllProducts()
+  }, [])
+
   const filteredProducts = products.filter(product => {
     const matchesSearch = !search || 
       product.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -52,6 +69,11 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
 
     return matchesSearch && matchesCategory && matchesStatus
   })
+
+  // Handle filter changes
+  const handleFilterChange = (filterSetter, value) => {
+    filterSetter(value)
+  }
 
   // Handle select all
   const handleSelectAll = () => {
@@ -295,7 +317,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
               }
 
               // Refresh products list
-              const productsResponse = await fetch("/api/products?limit=100")
+              const productsResponse = await fetch("/api/products?limit=1000")
               const productsData = await productsResponse.json()
               setProducts(productsData.products)
             }
@@ -338,67 +360,15 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
   const handleDownloadTemplate = () => {
     const template = [
       {
-        name: "Rice - Basmati",
-        description: "Premium quality basmati rice",
-        sku: "RICE-001",
-        category: "Grains",
-        buying_price: "100.00",
-        selling_price: "150.00",
-        price: "150.00",
-        stock_quantity: "50",
+        name: "Urea Fertilizer (1kg)",
+        description: "High nitrogen fertilizer for plant growth",
+        sku: "PROD-UR-1KG",
+        category: "Fertilizers",
+        buying_price: "180.00",
+        selling_price: "210.00",
+        price: "210.00",
+        stock_quantity: "200",
         unit_type: "kg",
-        unit_value: "1.0",
-        minimum_quantity: "5",
-        alert_before_days: "7",
-        expiry_date: "",
-        manufacture_date: "",
-        is_active: "true",
-        image_url: "",
-        // Variation 1: Small pack
-        variant_1_name: "Small (500g)",
-        variant_1_price: "75",
-        variant_1_buying_price: "50",
-        variant_1_stock: "100",
-        variant_1_sku_suffix: "500G",
-        variant_1_is_default: "yes",
-        // Variation 2: Medium pack
-        variant_2_name: "Medium (1kg)",
-        variant_2_price: "150",
-        variant_2_buying_price: "100",
-        variant_2_stock: "50",
-        variant_2_sku_suffix: "1KG",
-        variant_2_is_default: "",
-        // Variation 3: Large pack
-        variant_3_name: "Large (5kg)",
-        variant_3_price: "700",
-        variant_3_buying_price: "480",
-        variant_3_stock: "20",
-        variant_3_sku_suffix: "5KG",
-        variant_3_is_default: "",
-        // Empty variations 4 & 5
-        variant_4_name: "",
-        variant_4_price: "",
-        variant_4_buying_price: "",
-        variant_4_stock: "",
-        variant_4_sku_suffix: "",
-        variant_4_is_default: "",
-        variant_5_name: "",
-        variant_5_price: "",
-        variant_5_buying_price: "",
-        variant_5_stock: "",
-        variant_5_sku_suffix: "",
-        variant_5_is_default: ""
-      },
-      {
-        name: "Coconut Oil",
-        description: "Pure coconut oil - no variations",
-        sku: "OIL-001",
-        category: "Oils",
-        buying_price: "200.00",
-        selling_price: "250.00",
-        price: "250.00",
-        stock_quantity: "30",
-        unit_type: "l",
         unit_value: "1.0",
         minimum_quantity: "10",
         alert_before_days: "7",
@@ -406,37 +376,45 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
         manufacture_date: "",
         is_active: "true",
         image_url: "",
-        // No variations for this product
-        variant_1_name: "",
-        variant_1_price: "",
-        variant_1_buying_price: "",
-        variant_1_stock: "",
-        variant_1_sku_suffix: "",
-        variant_1_is_default: "",
-        variant_2_name: "",
-        variant_2_price: "",
-        variant_2_buying_price: "",
-        variant_2_stock: "",
-        variant_2_sku_suffix: "",
-        variant_2_is_default: "",
-        variant_3_name: "",
-        variant_3_price: "",
-        variant_3_buying_price: "",
-        variant_3_stock: "",
-        variant_3_sku_suffix: "",
-        variant_3_is_default: "",
-        variant_4_name: "",
-        variant_4_price: "",
-        variant_4_buying_price: "",
-        variant_4_stock: "",
-        variant_4_sku_suffix: "",
-        variant_4_is_default: "",
-        variant_5_name: "",
-        variant_5_price: "",
-        variant_5_buying_price: "",
-        variant_5_stock: "",
-        variant_5_sku_suffix: "",
-        variant_5_is_default: ""
+        batch_number: "BATCH-UR-2026-01"
+      },
+      {
+        name: "Organic Neem Pesticide (500ml)",
+        description: "Natural pest control solution for crops and gardens",
+        sku: "PROD-NEEM-500ML",
+        category: "Pesticides",
+        buying_price: "480.00",
+        selling_price: "550.00",
+        price: "550.00",
+        stock_quantity: "200",
+        unit_type: "bottles",
+        unit_value: "1.0",
+        minimum_quantity: "10",
+        alert_before_days: "7",
+        expiry_date: "",
+        manufacture_date: "",
+        is_active: "true",
+        image_url: "",
+        batch_number: "BATCH-NEEM-2026-01"
+      },
+      {
+        name: "Plastic Garden Pots (Medium)",
+        description: "Durable plastic pots for home and nursery use",
+        sku: "PROD-POT-MED",
+        category: "Garden Supplies",
+        buying_price: "90.00",
+        selling_price: "120.00",
+        price: "120.00",
+        stock_quantity: "200",
+        unit_type: "items",
+        unit_value: "1.0",
+        minimum_quantity: "20",
+        alert_before_days: "7",
+        expiry_date: "",
+        manufacture_date: "",
+        is_active: "true",
+        image_url: "",
+        batch_number: "BATCH-POT-2026-01"
       }
     ]
 
@@ -453,7 +431,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
 
     toast({
       title: "Template Downloaded",
-      description: "Easy format - just fill in the columns for each price variation",
+      description: "Simple format - ID is auto-generated, no variations needed",
     })
   }
 
@@ -545,11 +523,11 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             <Input
               placeholder="Search products..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleFilterChange(setSearch, e.target.value)}
               className="pl-10"
             />
           </div>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <Select value={categoryFilter} onValueChange={(value) => handleFilterChange(setCategoryFilter, value)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All Categories" />
             </SelectTrigger>
@@ -562,7 +540,7 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
               ))}
             </SelectContent>
           </Select>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(value) => handleFilterChange(setStatusFilter, value)}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
@@ -679,6 +657,8 @@ export default function ProductsTable({ initialProducts = [], initialCategories 
             ))
           )}
         </div>
+
+
       </CardContent>
 
       {/* Add Product Modal */}

@@ -43,7 +43,8 @@ export default function AddProductModal({
     expiry_date: "",
     manufacture_date: "",
     alert_before_days: "7",
-    minimum_quantity: "5"
+    minimum_quantity: "5",
+    return: true
   })
   const [errors, setErrors] = useState({})
   const [priceVariations, setPriceVariations] = useState([])
@@ -93,7 +94,8 @@ export default function AddProductModal({
           expiry_date: product.expiry_date ? product.expiry_date.split('T')[0] : "",
           manufacture_date: product.manufacture_date ? product.manufacture_date.split('T')[0] : "",
           alert_before_days: product.alert_before_days?.toString() || "7",
-          minimum_quantity: product.minimum_quantity?.toString() || "5"
+          minimum_quantity: product.minimum_quantity?.toString() || "5",
+          return: product.return !== undefined ? product.return : true
         })
         
         // Fetch existing price variations
@@ -118,7 +120,8 @@ export default function AddProductModal({
           expiry_date: "",
           manufacture_date: "",
           alert_before_days: "7",
-          minimum_quantity: "5"
+          minimum_quantity: "5",
+          return: true
         })
         setPriceVariations([])
       }
@@ -306,7 +309,8 @@ export default function AddProductModal({
         expiry_date: formData.expiry_date || null,
         manufacture_date: formData.manufacture_date || null,
         alert_before_days: parseInt(formData.alert_before_days) || 7,
-        minimum_quantity: parseInt(formData.minimum_quantity) || 5
+        minimum_quantity: parseInt(formData.minimum_quantity) || 5,
+        return: formData.return
       }
 
       const url = isEditing ? `/api/products/${product.id}` : "/api/products"
@@ -515,13 +519,23 @@ export default function AddProductModal({
                 )}
               </div>
 
-              <div className="flex items-center space-x-2 pt-2">
-                <Switch
-                  id="is_active"
-                  checked={formData.is_active}
-                  onCheckedChange={(checked) => handleInputChange("is_active", checked)}
-                />
-                <Label htmlFor="is_active" className="cursor-pointer">Active Product (visible in catalog)</Label>
+              <div className="space-y-3 pt-2 border-t">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="is_active"
+                    checked={formData.is_active}
+                    onCheckedChange={(checked) => handleInputChange("is_active", checked)}
+                  />
+                  <Label htmlFor="is_active" className="cursor-pointer">Active Product (visible in catalog)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="return"
+                    checked={formData.return}
+                    onCheckedChange={(checked) => handleInputChange("return", checked)}
+                  />
+                  <Label htmlFor="return" className="cursor-pointer">Available for Return</Label>
+                </div>
               </div>
             </TabsContent>
 

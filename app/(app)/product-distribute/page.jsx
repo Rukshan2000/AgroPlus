@@ -1,0 +1,230 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import ProductDistributionTable from "@/components/product-distribution-table"
+import BulkDistributeModal from "@/components/bulk-distribute-modal"
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Truck, Package, MapPin, TrendingUp, Zap } from "lucide-react"
+
+async function fetchDistributions() {
+  try {
+    const res = await fetch("/api/product-distribute?page=1&limit=1000")
+    if (res.ok) {
+      const data = await res.json()
+      return data
+    }
+  } catch (error) {
+    console.error("Error fetching distributions:", error)
+  }
+  return { distributions: [], total: 0 }
+}
+
+async function fetchProducts() {
+  try {
+    let allProducts = []
+    let page = 1
+    let hasMore = true
+
+    while (hasMore) {
+      const res = await fetch(`/api/products?page=${page}&limit=10000`)
+      if (res.ok) {
+        const data = await res.json()
+        allProducts = allProducts.concat(data.products || [])
+        
+        // Check if there are more pages
+        if (data.totalPages && page >= data.totalPages) {
+          hasMore = false
+        } else {
+          page++
+        }
+      } else {
+        hasMore = false
+      }
+    }
+    
+    return allProducts
+  } catch (error) {
+    console.error("Error fetching products:", error)
+  }
+  return []
+}
+
+async function fetchOutlets() {
+  try {
+    const res = await fetch("/api/outlets?page=1&limit=10000")
+    if (res.ok) {
+      const data = await res.json()
+      return data.outlets || []
+    }
+  } catch (error) {
+    console.error("Error fetching outlets:", error)
+  }
+  return []
+}
+
+export default function ProductDistributePage() {
+  const [initialData, setInitialData] = useState({
+    distributions: [],
+    products: [],
+    outlets: [],
+    stats: {}
+  })
+  const [loading, setLoading] = useState(true)
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false)
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [distributionsData, productsData, outletsData] = await Promise.all([
+          fetchDistributions(),
+          fetchProducts(),
+          fetchOutlets()
+        ])
+
+        // Calculate stats
+        const stats = {
+          totalDistributions: distributionsData.total || 0,
+          totalQuantity: distributionsData.distributions?.reduce((sum, d) => sum + parseFloat(d.quantity_distributed || 0), 0) || 0,
+          uniqueProducts: new Set(distributionsData.distributions?.map(d => d.product_id)).size || 0,
+          uniqueOutlets: new Set(distributionsData.distributions?.map(d => d.outlet_id)).size || 0,
+        }
+
+        setInitialData({
+          distributions: distributionsData.distributions || [],
+          products: productsData,
+          outlets: outletsData,
+          stats
+        })
+      } catch (error) {
+        console.error("Error loading data:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
+
+  const handleBulkDistributionSuccess = async () => {
+    // Reload data after successful bulk distribution
+    const [distributionsData, productsData, outletsData] = await Promise.all([
+      fetchDistributions(),
+      fetchProducts(),
+      fetchOutlets()
+    ])
+
+    const stats = {
+      totalDistributions: distributionsData.total || 0,
+      totalQuantity: distributionsData.distributions?.reduce((sum, d) => sum + parseFloat(d.quantity_distributed || 0), 0) || 0,
+      uniqueProducts: new Set(distributionsData.distributions?.map(d => d.product_id)).size || 0,
+      uniqueOutlets: new Set(distributionsData.distributions?.map(d => d.outlet_id)).size || 0,
+    }
+
+    setInitialData({
+      distributions: distributionsData.distributions || [],
+      products: productsData,
+      outlets: outletsData,
+      stats
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card>
+          <CardContent className="pt-6">
+            Loading product distribution data...
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Bulk Distribution Modal */}
+      <BulkDistributeModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        products={initialData.products}
+        outlets={initialData.outlets}
+        onSuccess={handleBulkDistributionSuccess}
+      />
+
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Truck className="h-8 w-8" />
+          Product Distribution
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          Distribute available products from warehouse to different outlets
+        </p>
+      </div>
+
+      {/* Quick Action Button */}
+      <Button 
+        onClick={() => setIsBulkModalOpen(true)}
+        className="bg-orange-600 hover:bg-orange-700 gap-2 w-full sm:w-auto"
+      >
+        <Zap className="h-4 w-4" />
+        Quick Bulk Distribution
+      </Button>
+
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Distributions</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{initialData.stats.totalDistributions}</div>
+            <p className="text-xs text-muted-foreground">Distribution records</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Quantity</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{initialData.stats.totalQuantity.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Units distributed</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Products</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{initialData.stats.uniqueProducts}</div>
+            <p className="text-xs text-muted-foreground">Unique products</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Outlets</CardTitle>
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{initialData.stats.uniqueOutlets}</div>
+            <p className="text-xs text-muted-foreground">Receiving outlets</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Distribution Table */}
+      <ProductDistributionTable
+        initialDistributions={initialData.distributions}
+        products={initialData.products}
+        outlets={initialData.outlets}
+      />
+    </div>
+  )
+}
