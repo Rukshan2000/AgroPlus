@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import ThermalReceipt from '@/components/pos/ThermalReceipt'
+import { printReceiptElement } from '@/lib/print-receipt'
 import {
   Select,
   SelectContent,
@@ -117,83 +118,23 @@ export default function FakeBillPage() {
   const billDiscountPct = subtotal > 0 ? (billDiscountAmount / subtotal) * 100 : 0
   const total = Math.max(0, subtotal - billDiscountAmount)
 
-  // Same browser-print flow as the POS: copy the rendered receipt into a hidden
-  // 80mm iframe and print it.
+  // Prints the same ThermalReceipt markup the POS prints.
   const printBill = () => {
     if (cart.length === 0) {
       toast({ title: 'Cart is empty', variant: 'destructive' })
       return
     }
 
-    const receiptContent = document.getElementById('thermal-receipt')
-    if (!receiptContent) {
+    const result = printReceiptElement(document.getElementById('thermal-receipt'), {
+      title: `Print Receipt - Bill #${billNumber || 'N/A'}`,
+    })
+
+    if (!result.ok) {
       toast({
         title: 'Print Error',
-        description: 'Receipt content not found',
+        description: result.error,
         variant: 'destructive',
       })
-      return
-    }
-
-    const iframe = document.createElement('iframe')
-    iframe.style.position = 'fixed'
-    iframe.style.right = '0'
-    iframe.style.bottom = '0'
-    iframe.style.width = '0'
-    iframe.style.height = '0'
-    iframe.style.border = '0'
-    document.body.appendChild(iframe)
-
-    const iframeDoc = iframe.contentWindow.document
-
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Print Receipt - Bill #${billNumber || 'N/A'}</title>
-          <style>
-            @media print {
-              @page {
-                size: 80mm auto;
-                margin: 0;
-              }
-              body {
-                margin: 0;
-                padding: 0;
-              }
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              font-family: monospace;
-              width: 80mm;
-            }
-          </style>
-        </head>
-        <body>
-          ${receiptContent.innerHTML}
-        </body>
-      </html>
-    `)
-    iframeDoc.close()
-
-    iframe.onload = () => {
-      try {
-        iframe.contentWindow.focus()
-        iframe.contentWindow.print()
-
-        setTimeout(() => {
-          document.body.removeChild(iframe)
-        }, 1000)
-      } catch (error) {
-        console.error('Print error:', error)
-        document.body.removeChild(iframe)
-        toast({
-          title: 'Print Error',
-          description: 'Failed to print receipt',
-          variant: 'destructive',
-        })
-      }
     }
   }
 

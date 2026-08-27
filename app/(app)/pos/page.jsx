@@ -20,6 +20,7 @@ import { CustomerFormModal } from '@/components/customer-form-modal'
 import { Button } from '@/components/ui/button'
 import ThemeToggle from '@/components/theme-toggle'
 import ScreenSizeChanger from '@/components/pos/screen-size-changer'
+import { printReceiptElement } from '@/lib/print-receipt'
 
 export default function POSSystem() {
   const [cart, setCart] = useState([])
@@ -871,67 +872,16 @@ export default function POSSystem() {
     }
 
     // Fallback: Browser print via hidden iframe
-    const iframe = document.createElement('iframe')
-    iframe.style.position = 'fixed'
-    iframe.style.right = '0'
-    iframe.style.bottom = '0'
-    iframe.style.width = '0'
-    iframe.style.height = '0'
-    iframe.style.border = '0'
-    document.body.appendChild(iframe)
-    
-    const iframeDoc = iframe.contentWindow.document
-    
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Print Receipt - Sale #${saleId || 'N/A'}</title>
-          <style>
-            @media print {
-              @page {
-                size: 80mm auto;
-                margin: 0;
-              }
-              body {
-                margin: 0;
-                padding: 0;
-              }
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              font-family: monospace;
-              width: 80mm;
-            }
-          </style>
-        </head>
-        <body>
-          ${receiptContent.innerHTML}
-        </body>
-      </html>
-    `)
-    iframeDoc.close()
-    
-    // Wait for content to load, then print and remove iframe
-    iframe.onload = () => {
-      try {
-        iframe.contentWindow.focus()
-        iframe.contentWindow.print()
-        
-        // Remove iframe after a delay
-        setTimeout(() => {
-          document.body.removeChild(iframe)
-        }, 1000)
-      } catch (error) {
-        console.error('Print error:', error)
-        document.body.removeChild(iframe)
-        toast({
-          title: "Print Error",
-          description: "Failed to print receipt",
-          variant: "destructive"
-        })
-      }
+    const result = printReceiptElement(receiptContent, {
+      title: `Print Receipt - Sale #${saleId || 'N/A'}`,
+    })
+
+    if (!result.ok) {
+      toast({
+        title: "Print Error",
+        description: result.error,
+        variant: "destructive"
+      })
     }
   }
 
