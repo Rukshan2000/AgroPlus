@@ -16,7 +16,7 @@ export default function Receipt({
   paymentDetails,
   billDiscount = 0
 }) {
-  const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
+  const subtotal = cart.reduce((sum, item) => sum + Number(item.total), 0)
   const billDiscountAmount = (subtotal * billDiscount) / 100
   const total = subtotal - billDiscountAmount
 
@@ -44,11 +44,11 @@ export default function Receipt({
               <div className="flex-1">
                 <div className="font-semibold text-gray-900 dark:text-gray-100">{item.name}</div>
                 <div className="text-gray-600 dark:text-gray-400">
-                  {item.quantity} x LKR {item.unitPrice.toFixed(2)}
+                  {item.quantity} x LKR {Number(item.unitPrice).toFixed(2)}
                   {item.discount > 0 && ` (-${item.discount}%)`}
                 </div>
               </div>
-              <div className="font-bold text-gray-900 dark:text-gray-100">LKR {item.total.toFixed(2)}</div>
+              <div className="font-bold text-gray-900 dark:text-gray-100">LKR {Number(item.total).toFixed(2)}</div>
             </div>
           ))}
         </div>

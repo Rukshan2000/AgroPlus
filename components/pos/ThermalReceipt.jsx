@@ -3,7 +3,7 @@
 import React from 'react'
 
 export default function ThermalReceipt({ cart, saleId, paymentDetails, billDiscount = 0 }) {
-  const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
+  const subtotal = cart.reduce((sum, item) => sum + Number(item.total), 0)
   const billDiscountAmount = (subtotal * billDiscount) / 100
   const total = subtotal - billDiscountAmount
   const currentDate = new Date()
@@ -63,11 +63,11 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1mm' }}>
           <span>Date:</span>
-          <span>{currentDate.toLocaleDateString()}</span>
+          <span suppressHydrationWarning>{currentDate.toLocaleDateString('en-GB')}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
           <span>Time:</span>
-          <span suppressHydrationWarning>{currentDate.toLocaleTimeString()}</span>
+          <span suppressHydrationWarning>{currentDate.toLocaleTimeString('en-GB')}</span>
         </div>
       </div>
 
@@ -88,11 +88,11 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
               paddingLeft: '2mm'
             }}>
               <span>
-                {item.quantity} x LKR {item.unitPrice.toFixed(2)}
+                {item.quantity} x LKR {Number(item.unitPrice).toFixed(2)}
                 {item.discount > 0 && ` (-${item.discount}%)`}
               </span>
               <span style={{ fontWeight: 'bold' }}>
-                LKR {item.total.toFixed(2)}
+                LKR {Number(item.total).toFixed(2)}
               </span>
             </div>
           </div>
