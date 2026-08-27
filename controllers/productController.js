@@ -59,7 +59,7 @@ export async function list(request) {
 
   const { searchParams } = new URL(request.url)
   const page = parseInt(searchParams.get('page')) || 1
-  const limit = Math.min(parseInt(searchParams.get('limit')) || 10, 100)
+  const limit = parseInt(searchParams.get('limit')) || 10
   const category = searchParams.get('category') || undefined
   const search = searchParams.get('search') || undefined
   const is_active = searchParams.get('is_active') === 'true' ? true : 
