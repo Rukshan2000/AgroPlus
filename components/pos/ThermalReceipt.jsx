@@ -2,11 +2,36 @@
 
 import React from 'react'
 
-export default function ThermalReceipt({ cart, saleId, paymentDetails, billDiscount = 0 }) {
+// Renders a per-item discount the same way the cashier entered it:
+// a flat LKR amount off the line total, or a percentage off the unit price.
+function formatItemDiscount(item) {
+  if (!item.discount || item.discount <= 0) return ''
+  if (item.discountType === 'price') {
+    const amount = (Number(item.originalPrice) - Number(item.unitPrice)) * Number(item.quantity)
+    return ` (-LKR ${amount.toFixed(2)})`
+  }
+  return ` (-${Number(item.discount).toFixed(1)}%)`
+}
+
+export default function ThermalReceipt({
+  cart,
+  saleId,
+  paymentDetails,
+  billDiscount = 0,
+  billDiscountType = 'percentage',
+  date
+}) {
   const subtotal = cart.reduce((sum, item) => sum + Number(item.total), 0)
+  // `billDiscount` is always the percentage equivalent, so the amount is correct
+  // for both modes; only the label below changes.
   const billDiscountAmount = (subtotal * billDiscount) / 100
   const total = subtotal - billDiscountAmount
-  const currentDate = new Date()
+  const billDiscountLabel = billDiscountType === 'price'
+    ? `Bill Discount (LKR ${billDiscountAmount.toFixed(2)})`
+    : `Bill Discount (${Number(billDiscount).toFixed(1)}%)`
+  // `date` lets callers override the printed date/time; defaults to now
+  const parsedDate = date ? new Date(date) : null
+  const currentDate = parsedDate && !isNaN(parsedDate.getTime()) ? parsedDate : new Date()
 
   return (
     <div 
@@ -89,7 +114,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
             }}>
               <span>
                 {item.quantity} x LKR {Number(item.unitPrice).toFixed(2)}
-                {item.discount > 0 && ` (-${item.discount}%)`}
+                {formatItemDiscount(item)}
               </span>
               <span style={{ fontWeight: 'bold' }}>
                 LKR {Number(item.total).toFixed(2)}
@@ -115,7 +140,7 @@ export default function ThermalReceipt({ cart, saleId, paymentDetails, billDisco
           marginBottom: '2mm',
           color: 'black'
             }}>
-          <span>Bill Discount ({billDiscount}%):</span>
+          <span>{billDiscountLabel}:</span>
           <span>-LKR {billDiscountAmount.toFixed(2)}</span>
             </div>
           )}

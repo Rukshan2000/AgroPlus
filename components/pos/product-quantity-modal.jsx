@@ -15,6 +15,9 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Check, Minus, Plus } from "lucide-react"
 
+// Smallest sellable quantity (supports fractional/weight-based items, e.g. 0.01 kg)
+const MIN_QTY = 0.01
+
 export default function ProductQuantityModal({
   isOpen,
   onClose,
@@ -24,17 +27,22 @@ export default function ProductQuantityModal({
 }) {
   const [variations, setVariations] = useState([])
   const [selectedVariation, setSelectedVariation] = useState(null)
-  const [quantity, setQuantity] = useState(1)
+  // Raw text so partial input like "0." or "0.0" survives while typing
+  const [quantityInput, setQuantityInput] = useState('1')
+  // True until the user first types — lets the first keypress replace the default "1"
+  const [freshInput, setFreshInput] = useState(true)
   const [loading, setLoading] = useState(false)
-  const [numpadValue, setNumpadValue] = useState('')
+
+  const maxQty = product?.available_quantity || 999999
+  const quantity = parseFloat(quantityInput) || 0
 
   useEffect(() => {
     if (isOpen && product) {
       // Reset variations state immediately when opening modal
       setVariations([])
       setSelectedVariation(null)
-      setQuantity(1) // Reset quantity when modal opens
-      setNumpadValue('') // Reset numpad value
+      setQuantityInput('1') // Reset quantity when modal opens
+      setFreshInput(true)
       fetchVariations()
     }
   }, [isOpen, product])
@@ -55,7 +63,7 @@ export default function ProductQuantityModal({
           break
         case 'Enter':
           event.preventDefault()
-          if (quantity >= 0.1) {
+          if (quantity >= MIN_QTY) {
             handleConfirm()
           }
           break
@@ -98,26 +106,29 @@ export default function ProductQuantityModal({
   }
 
   const handleQuantityChange = (value) => {
-    const numValue = parseFloat(value) || 0.1
-    if (numValue > 0 && numValue <= (product?.available_quantity || 999999)) {
-      setQuantity(numValue)
+    // Allow empty / partial decimals ("", "0.", "0.0") while typing
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      const numValue = parseFloat(value)
+      if (!isNaN(numValue) && numValue > maxQty) return // don't exceed stock
+      setQuantityInput(value)
+      setFreshInput(false)
     }
   }
 
   const incrementQuantity = () => {
-    if (quantity < (product?.available_quantity || 999999)) {
-      setQuantity(prev => prev + 1)
+    if (quantity < maxQty) {
+      setQuantityInput(String(Math.min(maxQty, quantity + 1)))
     }
   }
 
   const decrementQuantity = () => {
-    if (quantity > 0.1) {
-      setQuantity(prev => Math.max(0.1, prev - 1))
+    if (quantity > MIN_QTY) {
+      setQuantityInput(String(Math.max(MIN_QTY, quantity - 1)))
     }
   }
 
   const handleConfirm = () => {
-    if (product) {
+    if (product && quantity >= MIN_QTY) {
       onAddToCart(product, selectedVariation, quantity)
       onClose()
     }
@@ -125,32 +136,42 @@ export default function ProductQuantityModal({
 
   const handleClose = () => {
     setSelectedVariation(null)
-    setQuantity(1)
-    setNumpadValue('')
+    setQuantityInput('1')
     onClose()
   }
 
-  // Numpad handlers
+  // Numpad types directly into the quantity field.
+  // The first press after opening replaces the default "1" instead of appending.
   const handleNumpadClick = (value) => {
     if (value === 'C') {
-      setNumpadValue('')
-      setQuantity(1)
-    } else if (value === '.') {
-      if (!numpadValue.includes('.')) {
-        setNumpadValue(prev => prev + '.')
-      }
-    } else {
-      const newValue = numpadValue + value
-      setNumpadValue(newValue)
-      const numValue = parseFloat(newValue) || 0
-      if (numValue > 0 && numValue <= (product?.available_quantity || 999999)) {
-        setQuantity(numValue)
-      }
+      setQuantityInput('')
+      setFreshInput(false)
+      return
     }
+
+    if (value === '.') {
+      setQuantityInput(prev => {
+        const base = freshInput ? '' : prev
+        if (base.includes('.')) return prev
+        return base === '' ? '0.' : base + '.'
+      })
+      setFreshInput(false)
+      return
+    }
+
+    setQuantityInput(prev => {
+      const base = freshInput ? '' : prev
+      const next = base + value
+      const numValue = parseFloat(next)
+      if (!isNaN(numValue) && numValue > maxQty) return prev // don't exceed stock
+      return next
+    })
+    setFreshInput(false)
   }
 
-  const handleInputFocus = () => {
-    setNumpadValue(quantity.toString())
+  const handleInputFocus = (e) => {
+    setFreshInput(false)
+    e.target.select()
   }
 
   const hasVariations = variations.length > 0
@@ -190,18 +211,16 @@ export default function ProductQuantityModal({
                 variant="outline"
                 size="lg"
                 onClick={decrementQuantity}
-                disabled={quantity <= 0.1}
+                disabled={quantity <= MIN_QTY}
                 className="h-14 w-14 text-xl font-bold"
               >
                 <Minus className="h-7 w-7" />
               </Button>
               <Input
                 id="quantity"
-                type="number"
-                min="0.1"
-                max={product?.available_quantity || 999999}
-                step="0.1"
-                value={quantity}
+                type="text"
+                inputMode="decimal"
+                value={quantityInput}
                 onChange={(e) => handleQuantityChange(e.target.value)}
                 onFocus={handleInputFocus}
                 className="text-center w-24 h-12 text-lg font-bold"
@@ -211,7 +230,7 @@ export default function ProductQuantityModal({
                 variant="outline"
                 size="lg"
                 onClick={incrementQuantity}
-                disabled={quantity >= (product?.available_quantity || 999999)}
+                disabled={quantity >= maxQty}
                 className="h-14 w-14 text-xl font-bold"
               >
                 <Plus className="h-7 w-7" />
@@ -325,7 +344,7 @@ export default function ProductQuantityModal({
               </Button>
               <Button
                 onClick={handleConfirm}
-                disabled={quantity < 0.1}
+                disabled={quantity < MIN_QTY}
               >
                 Add to Cart
               </Button>

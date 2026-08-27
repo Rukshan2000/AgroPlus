@@ -25,9 +25,6 @@ export default function POSSystem() {
   const [cart, setCart] = useState([])
   const [productId, setProductId] = useState('')
   const [quantity, setQuantity] = useState('1')
-  const [discount, setDiscount] = useState('') // Per-item discount
-  const [discountByPrice, setDiscountByPrice] = useState('') // Per-item discount by selling price
-  const [itemDiscountType, setItemDiscountType] = useState('percentage') // 'percentage' or 'price'
   const [billDiscount, setBillDiscount] = useState('') // Whole bill discount
   const [billDiscountByPrice, setBillDiscountByPrice] = useState('') // Bill discount by final price
   const [billDiscountType, setBillDiscountType] = useState('percentage') // 'percentage' or 'price'
@@ -49,8 +46,11 @@ export default function POSSystem() {
   const [saleId, setSaleId] = useState(null) // Store sale ID for receipt
   const [selectedProductIndex, setSelectedProductIndex] = useState(0) // For arrow key navigation
   const [selectedOutlet, setSelectedOutlet] = useState(null) // Store selected outlet
-  const [selectedCartIndex, setSelectedCartIndex] = useState(null) // For cart item quantity editing
+  const [selectedCartIndex, setSelectedCartIndex] = useState(null) // For cart item quantity/discount editing
   const [cartInputQty, setCartInputQty] = useState('') // Temporary quantity input for selected cart item
+  const [cartInputDiscount, setCartInputDiscount] = useState('') // Temporary per-item discount for selected cart item
+  const [cartDiscountType, setCartDiscountType] = useState('percentage') // 'percentage' or 'price' for the selected cart item
+  const [cartEditField, setCartEditField] = useState('qty') // Which field the keypad types into: 'qty' | 'discount'
   const [showStockWarning, setShowStockWarning] = useState(false) // Stock warning modal
   const [stockWarningData, setStockWarningData] = useState(null) // Data for stock warning modal
   const [discountMode, setDiscountMode] = useState(null) // 'item' or 'bill' for discount editing via keyboard
@@ -135,50 +135,9 @@ export default function POSSystem() {
     setFilteredProducts(sortedProducts)
   }, [productSearch, products, sortBy, sortOrder])
 
-  // Recalculate cart items when item discount changes
-  useEffect(() => {
-    if (cart.length === 0) return
-    
-    setCart(prev => prev.map(item => {
-      const itemPrice = item.originalPrice
-      let discountPercent = 0
-      
-      // Calculate discount based on current discount mode
-      if (itemDiscountType === 'price' && discountByPrice) {
-        const pkrDiscount = parseFloat(discountByPrice)
-        const finalPrice = Math.max(0, itemPrice - pkrDiscount)
-        discountPercent = itemPrice > 0 ? ((itemPrice - finalPrice) / itemPrice) * 100 : 0
-        
-        return {
-          ...item,
-          discount: discountPercent,
-          unitPrice: finalPrice,
-          total: finalPrice * item.quantity
-        }
-      } else if (itemDiscountType === 'percentage' && discount) {
-        discountPercent = parseFloat(discount) || 0
-        const discountAmount = (itemPrice * discountPercent) / 100
-        const finalPrice = itemPrice - discountAmount
-        
-        return {
-          ...item,
-          discount: discountPercent,
-          unitPrice: finalPrice,
-          total: finalPrice * item.quantity
-        }
-      } else if (!discount && !discountByPrice) {
-        // No discount applied
-        return {
-          ...item,
-          discount: 0,
-          unitPrice: itemPrice,
-          total: itemPrice * item.quantity
-        }
-      }
-      
-      return item
-    }))
-  }, [discount, discountByPrice, itemDiscountType, cart.length])
+  // NOTE: The item discount input applies only to the NEXT item added to the cart.
+  // Items already in the cart keep the discount they were added with (stored per
+  // item as discount/unitPrice/total), so changing this input must not touch them.
 
   const loadProducts = async (outletId) => {
     try {
@@ -249,15 +208,6 @@ export default function POSSystem() {
     if (sellingPrice >= originalPrice) return 0
     const discount = ((originalPrice - sellingPrice) / originalPrice) * 100
     return Math.max(0, Math.min(100, discount)) // Clamp between 0-100
-  }
-
-  // Get effective discount percentage (for percentage mode) or amount (for PKR mode)
-  const getItemDiscountPercent = (product) => {
-    if (itemDiscountType === 'price' && discountByPrice) {
-      // In PKR mode, return the amount directly as "percent" (will be handled differently in calculations)
-      return Math.max(0, parseFloat(discountByPrice)) // Returns PKR amount, not a percentage
-    }
-    return parseFloat(discount) || 0
   }
 
   // Get effective bill discount percentage (for percentage mode) or amount (for PKR mode)
@@ -364,21 +314,10 @@ export default function POSSystem() {
     const qty = parseFloat(quantity) || 1
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
     
-    // Calculate final price based on discount mode
-    let finalPrice = productPrice
-    let discountPercent = 0
-    if (itemDiscountType === 'price' && discountByPrice) {
-      // PKR discount mode: deduct PKR amount from price
-      const pkrDiscount = parseFloat(discountByPrice)
-      finalPrice = Math.max(0, productPrice - pkrDiscount)
-      // Calculate percentage for display purposes
-      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
-    } else {
-      // Percentage discount mode
-      discountPercent = parseFloat(discount) || 0
-      const discountAmount = (productPrice * discountPercent) / 100
-      finalPrice = productPrice - discountAmount
-    }
+    // Items are added at full price; discounts are applied per line by
+    // clicking the item in the cart (see applyCartItemEdits).
+    const finalPrice = productPrice
+    const discountPercent = 0
 
     if (existingItemIndex >= 0) {
       // Product already in cart, increase quantity
@@ -496,21 +435,10 @@ export default function POSSystem() {
 
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
     
-    // Calculate final price based on discount mode
-    let finalPrice = productPrice
-    let discountPercent = 0
-    if (itemDiscountType === 'price' && discountByPrice) {
-      // PKR discount mode: deduct PKR amount from price
-      const pkrDiscount = parseFloat(discountByPrice)
-      finalPrice = Math.max(0, productPrice - pkrDiscount)
-      // Calculate percentage for display purposes
-      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
-    } else {
-      // Percentage discount mode
-      discountPercent = parseFloat(discount) || 0
-      const discountAmount = (productPrice * discountPercent) / 100
-      finalPrice = productPrice - discountAmount
-    }
+    // Items are added at full price; discounts are applied per line by
+    // clicking the item in the cart (see applyCartItemEdits).
+    const finalPrice = productPrice
+    const discountPercent = 0
 
     if (existingItemIndex >= 0) {
       // Product already in cart, increase quantity
@@ -614,12 +542,28 @@ export default function POSSystem() {
     const { product, priceVariation, isUpdating, existingItemIndex, isCartEdit, cartIndex } = stockWarningData
     const maxAvailable = Math.max(0, product.available_quantity - (stockWarningData.currentCartQuantity || 0))
 
-    // Handle cart item edit case (when user edits quantity from cart)
+    // Handle cart item edit case (when user edits quantity/discount from cart)
     if (isCartEdit && cartIndex !== undefined) {
       const item = cart[cartIndex]
-      setCart(prev => prev.map((cartItem, i) => 
-        i === cartIndex 
-          ? { ...cartItem, quantity: maxAvailable, total: cartItem.unitPrice * maxAvailable }
+      // Keep the discount the user was typing in the edit panel
+      const { percent, unitPrice } = resolveDiscount(
+        item.originalPrice,
+        maxAvailable,
+        cartInputDiscount,
+        cartDiscountType
+      )
+
+      setCart(prev => prev.map((cartItem, i) =>
+        i === cartIndex
+          ? {
+              ...cartItem,
+              quantity: maxAvailable,
+              discount: percent,
+              discountType: cartDiscountType,
+              discountValue: parseFloat(cartInputDiscount) || 0,
+              unitPrice,
+              total: unitPrice * maxAvailable
+            }
           : cartItem
       ))
 
@@ -629,8 +573,7 @@ export default function POSSystem() {
         duration: 1000
       })
 
-      setSelectedCartIndex(null)
-      setCartInputQty('')
+      closeCartEdit()
       setShowStockWarning(false)
       setStockWarningData(null)
       
@@ -645,21 +588,10 @@ export default function POSSystem() {
 
     const productPrice = priceVariation ? priceVariation.price : getProductPrice(product)
     
-    // Calculate final price based on discount mode
-    let finalPrice = productPrice
-    let discountPercent = 0
-    if (itemDiscountType === 'price' && discountByPrice) {
-      // PKR discount mode: deduct PKR amount from price
-      const pkrDiscount = parseFloat(discountByPrice)
-      finalPrice = Math.max(0, productPrice - pkrDiscount)
-      // Calculate percentage for display purposes
-      discountPercent = productPrice > 0 ? ((productPrice - finalPrice) / productPrice) * 100 : 0
-    } else {
-      // Percentage discount mode
-      discountPercent = parseFloat(discount) || 0
-      const discountAmount = (productPrice * discountPercent) / 100
-      finalPrice = productPrice - discountAmount
-    }
+    // Items are added at full price; discounts are applied per line by
+    // clicking the item in the cart (see applyCartItemEdits).
+    const finalPrice = productPrice
+    const discountPercent = 0
 
     if (isUpdating && existingItemIndex !== undefined) {
       // Update existing item
@@ -727,47 +659,140 @@ export default function POSSystem() {
     })
   }
 
-  const updateQuantity = (index, newQty) => {
+  // Resolve a discount entered as either a percentage or a flat LKR amount into
+  // the canonical { percent, unitPrice, amount } used by the cart/receipt.
+  // A LKR discount is taken off the LINE TOTAL (price x qty), not the unit price:
+  // qty 5 @ LKR 10 with a LKR 20 discount => line 50 - 20 = 30, unit price 6.
+  const resolveDiscount = (originalPrice, quantity, value, type) => {
+    const raw = Math.max(0, parseFloat(value) || 0)
+    const qty = parseFloat(quantity) || 0
+    const lineTotal = originalPrice * qty
+
+    if (type === 'price') {
+      const amount = Math.min(raw, lineTotal) // never below zero
+      const unitPrice = qty > 0 ? (lineTotal - amount) / qty : originalPrice
+      const percent = lineTotal > 0 ? (amount / lineTotal) * 100 : 0
+      return { percent, unitPrice, amount }
+    }
+
+    const percent = Math.min(100, raw)
+    const unitPrice = originalPrice - (originalPrice * percent) / 100
+    return { percent, unitPrice, amount: (originalPrice - unitPrice) * qty }
+  }
+
+  // Apply quantity + per-item discount to a single cart line (used by the
+  // click-to-edit panel). Only ever touches the item at `index`.
+  const applyCartItemEdits = (index, newQty, newDiscountValue, newDiscountType) => {
     if (newQty <= 0) {
       removeFromCart(index)
+      closeCartEdit()
       return
     }
 
     const item = cart[index]
-    if (newQty > item.availableStock) {
-      // Show warning modal for cart quantity edit
+    if (!item) {
+      toast({
+        title: "Item not found",
+        description: "Could not update that cart line",
+        variant: "destructive"
+      })
+      closeCartEdit()
+      return
+    }
+
+    // Only enforce a stock ceiling when we actually know the stock
+    if (Number.isFinite(item.availableStock) && newQty > item.availableStock) {
       setStockWarningData({
         productName: item.name,
         availableQuantity: item.availableStock,
         requestedQuantity: newQty,
-        currentCartQuantity: 0, // Not adding to existing, replacing
-        product: { 
-          id: item.id, 
-          name: item.name, 
-          available_quantity: item.availableStock 
+        currentCartQuantity: 0,
+        product: {
+          id: item.id,
+          name: item.name,
+          available_quantity: item.availableStock
         },
         priceVariation: item.variationId ? { id: item.variationId, variant_name: item.variationName } : null,
-        isCartEdit: true, // Flag to indicate this is a cart edit
+        isCartEdit: true,
         cartIndex: index
       })
       setShowStockWarning(true)
       return
     }
-    
-    setCart(prev => prev.map((item, i) => 
-      i === index 
-        ? { ...item, quantity: newQty, total: item.unitPrice * newQty }
-        : item
+
+    const { percent, unitPrice, amount } = resolveDiscount(
+      item.originalPrice,
+      newQty,
+      newDiscountValue,
+      newDiscountType
+    )
+
+    setCart(prev => prev.map((cartItem, i) =>
+      i === index
+        ? {
+            ...cartItem,
+            quantity: newQty,
+            discount: percent,
+            // Remember how the user entered it so reopening shows the same thing
+            discountType: newDiscountType,
+            discountValue: parseFloat(newDiscountValue) || 0,
+            unitPrice,
+            total: unitPrice * newQty
+          }
+        : cartItem
     ))
-    
+
+    const discountLabel = newDiscountType === 'price'
+      ? ` (-LKR ${amount.toFixed(2)})`
+      : ` (-${percent.toFixed(1)}%)`
+
     toast({
-      title: "Quantity updated",
-      description: `${item.name} × ${newQty}`,
+      title: "Item updated",
+      description: `${item.name} × ${newQty}${amount > 0 ? discountLabel : ''}`,
       duration: 800
     })
+
+    closeCartEdit()
+  }
+
+  const closeCartEdit = () => {
+    setSelectedCartIndex(null)
+    setCartInputQty('')
+    setCartInputDiscount('')
+    setCartDiscountType('percentage')
+    setCartEditField('qty')
+  }
+
+  const openCartEdit = (index) => {
+    const item = cart[index]
+    const type = item.discountType || 'percentage'
+    setSelectedCartIndex(index)
+    setCartInputQty(item.quantity.toString())
+    // Fall back to the stored percentage for items added before a type was tracked
+    setCartInputDiscount(
+      (item.discountValue !== undefined ? item.discountValue : item.discount || 0).toString()
+    )
+    setCartDiscountType(type)
+    setCartEditField('qty')
+  }
+
+  // Apply whatever is currently typed in the cart edit panel
+  const commitCartEdit = () => {
+    if (selectedCartIndex === null) return
+    applyCartItemEdits(
+      selectedCartIndex,
+      parseFloat(cartInputQty) || 1,
+      cartInputDiscount,
+      cartDiscountType
+    )
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
+  // Sum of the discounts actually stored on each cart line (not the input field)
+  const itemDiscountTotal = cart.reduce(
+    (sum, item) => sum + Math.max(0, item.originalPrice - item.unitPrice) * item.quantity,
+    0
+  )
   const billDiscountAmount = billDiscountType === 'price' && billDiscountByPrice 
     ? Math.min(parseFloat(billDiscountByPrice), subtotal) // PKR mode: flat discount
     : (subtotal * (parseFloat(billDiscount) || 0)) / 100 // Percentage mode
@@ -916,8 +941,7 @@ export default function POSSystem() {
     setSaleId(null)
     setBillDiscount('')
     setBillDiscountByPrice('')
-    setDiscount('')
-    setDiscountByPrice('')
+    closeCartEdit()
     toast({
       title: "Cart cleared",
       description: "All items removed from cart"
@@ -1335,13 +1359,8 @@ export default function POSSystem() {
               onKeyPress={(e) => {
                 if (e.key === 'Enter') {
                   if (selectedCartIndex !== null) {
-                    // Apply quantity if cart item is selected
-                    const newQty = parseFloat(cartInputQty) || 1
-                    if (newQty > 0) {
-                      updateQuantity(selectedCartIndex, newQty)
-                      setSelectedCartIndex(null)
-                      setCartInputQty('')
-                    }
+                    // Apply qty + discount if a cart item is selected
+                    commitCartEdit()
                   } else if (cart.length > 0 && !productId) {
                     // If cart has items and product field is empty, complete sale
                     initiatePayment()
@@ -1403,54 +1422,13 @@ export default function POSSystem() {
           {/* Discount Section - Compact */}
           <div className="bg-gray-900 border-t-2 border-gray-700 px-3 py-2 border-b-2">
             <div className="flex items-center gap-4">
-              {/* Item Discount */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-yellow-400 font-bold">Item:</span>
-                {/* Mode Toggle */}
-                <div className="flex gap-1 border-2 border-yellow-700 rounded-none">
-                  <button
-                    onClick={() => {
-                      setItemDiscountType('percentage')
-                      setDiscountByPrice('')
-                    }}
-                    className={`px-2 h-7 text-xs font-bold border-r-2 border-yellow-700 ${itemDiscountType === 'percentage' ? 'bg-yellow-600 text-white' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}
-                  >
-                    %
-                  </button>
-                  <button
-                    onClick={() => {
-                      setItemDiscountType('price')
-                      setDiscount('')
-                    }}
-                    className={`px-2 h-7 text-xs font-bold ${itemDiscountType === 'price' ? 'bg-yellow-600 text-white' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}
-                  >
-                    PKR
-                  </button>
-                </div>
-                
-                {/* Input based on mode */}
-                {discountMode === 'item' ? (
-                  <input type="text" value={discountInputValue} readOnly className="w-16 h-9 px-2 text-sm font-bold bg-blue-950 text-white border-2 border-blue-600 rounded-none text-center" />
-                ) : itemDiscountType === 'percentage' ? (
-                  <>
-                    <input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500 rounded-none text-center" placeholder="0" />
-                    <span className="text-sm text-gray-400">%</span>
-                    {[5, 10, 15, 20].map((pct) => (
-                      <button key={`item-${pct}`} onClick={() => setDiscount(pct.toString())} className={`h-9 px-3 text-sm font-bold border-2 rounded-none ${discount === pct.toString() ? 'bg-yellow-600 border-yellow-400 text-white' : 'bg-yellow-800 hover:bg-yellow-700 border-yellow-900 text-yellow-100'}`}>{pct}%</button>
-                    ))}
-                    {discount && parseFloat(discount) > 0 && <button onClick={() => setDiscount('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
-                  </>
-                ) : (
-                  <>
-                    <input type="number" min="0" step="0.01" value={discountByPrice} onChange={(e) => setDiscountByPrice(e.target.value)} className="w-24 h-9 px-2 text-sm font-bold bg-gray-800 text-white border-2 border-gray-600 focus:border-yellow-500 rounded-none text-center" placeholder="Discount amount" />
-                    <span className="text-sm text-gray-400">PKR</span>
-                    {discountByPrice && parseFloat(discountByPrice) > 0 && <button onClick={() => setDiscountByPrice('')} className="w-9 h-9 bg-red-700 hover:bg-red-800 text-white rounded-none text-sm font-bold">×</button>}
-                  </>
-                )}
-              </div>
-              
+              {/* Per-item discounts are set by clicking a line in the cart */}
+              <span className="text-xs text-gray-400 font-bold">
+                Item discount: click an item in the cart →
+              </span>
+
               <div className="w-px h-9 bg-gray-600"></div>
-              
+
               {/* Bill Discount */}
               <div className="flex items-center gap-2">
                 <span className="text-sm text-orange-400 font-bold">Bill:</span>
@@ -1534,10 +1512,7 @@ export default function POSSystem() {
               {cart.map((item, index) => (
                 <div 
                   key={index} 
-                  onClick={() => {
-                    setSelectedCartIndex(index)
-                    setCartInputQty(item.quantity.toString())
-                  }}
+                  onClick={() => openCartEdit(index)}
                   className={`border-2 p-3 rounded-none cursor-pointer transition-all ${
                     selectedCartIndex === index
                       ? 'bg-blue-900 border-blue-500 ring-2 ring-blue-400'
@@ -1554,8 +1529,7 @@ export default function POSSystem() {
                         e.stopPropagation()
                         removeFromCart(index)
                         if (selectedCartIndex === index) {
-                          setSelectedCartIndex(null)
-                          setCartInputQty('')
+                          closeCartEdit()
                         }
                       }}
                       className="w-7 h-7 bg-red-700 hover:bg-red-800 text-white rounded-none flex items-center justify-center text-lg font-bold ml-2 flex-shrink-0"
@@ -1564,30 +1538,139 @@ export default function POSSystem() {
                     </button>
                   </div>
                   <div className="flex justify-between items-center mb-2 text-sm font-bold">
-                    <span className="text-gray-300">{selectedCartIndex === index ? 'NEW QTY:' : `Qty: ${item.quantity}`}</span>
+                    <span className="text-gray-300">{selectedCartIndex === index ? 'EDITING:' : `Qty: ${item.quantity}`}</span>
                     <span className="text-green-400 text-base">LKR {item.total.toFixed(2)}</span>
                   </div>
+                  {item.discount > 0 && (
+                    <div className="flex justify-between items-center mb-2 text-xs font-bold text-yellow-400">
+                      <span>LKR {item.originalPrice.toFixed(2)} → {item.unitPrice.toFixed(2)}</span>
+                      <span>
+                        {item.discountType === 'price'
+                          ? `-LKR ${((item.originalPrice - item.unitPrice) * item.quantity).toFixed(2)}`
+                          : `-${item.discount.toFixed(1)}%`}
+                      </span>
+                    </div>
+                  )}
                   {selectedCartIndex === index && (
-                    <div className="pt-2 border-t border-blue-700 text-center space-y-1">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={cartInputQty}
-                        onChange={(e) => setCartInputQty(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            const newQty = parseFloat(cartInputQty) || 1
-                            if (newQty > 0) {
-                              updateQuantity(selectedCartIndex, newQty)
-                              setSelectedCartIndex(null)
-                              setCartInputQty('')
-                            }
-                          }
-                        }}
-                        className="quantity-input w-full text-center text-white font-bold text-lg bg-blue-950 p-2 border-2 border-blue-600 focus:border-blue-400 rounded-none"
-                        autoFocus
-                      />
-                      <div className="text-xs text-blue-300 font-bold">Type quantity and press Enter, or use keypad</div>
+                    <div className="pt-2 border-t border-blue-700 space-y-2" onClick={(e) => e.stopPropagation()}>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <div className="text-xs text-blue-300 font-bold mb-1 text-left">QTY</div>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={cartInputQty}
+                            onFocus={() => setCartEditField('qty')}
+                            onChange={(e) => setCartInputQty(e.target.value)}
+                            onKeyPress={(e) => { if (e.key === 'Enter') commitCartEdit() }}
+                            className={`quantity-input w-full text-center text-white font-bold text-lg bg-blue-950 p-2 border-2 rounded-none ${cartEditField === 'qty' ? 'border-blue-400' : 'border-blue-700'}`}
+                            autoFocus
+                          />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-yellow-300 font-bold">DISCOUNT</span>
+                            {/* Percentage vs flat LKR amount */}
+                            <div className="flex border border-yellow-700">
+                              <button
+                                onClick={() => {
+                                  setCartDiscountType('percentage')
+                                  setCartInputDiscount('0')
+                                  setCartEditField('discount')
+                                }}
+                                className={`px-2 h-5 text-[10px] font-bold border-r border-yellow-700 ${cartDiscountType === 'percentage' ? 'bg-yellow-600 text-white' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}
+                              >
+                                %
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCartDiscountType('price')
+                                  setCartInputDiscount('0')
+                                  setCartEditField('discount')
+                                }}
+                                className={`px-2 h-5 text-[10px] font-bold ${cartDiscountType === 'price' ? 'bg-yellow-600 text-white' : 'bg-yellow-900 text-yellow-100 hover:bg-yellow-800'}`}
+                              >
+                                LKR
+                              </button>
+                            </div>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            max={cartDiscountType === 'price'
+                              ? item.originalPrice * (parseFloat(cartInputQty) || 0)
+                              : 100}
+                            step="0.01"
+                            value={cartInputDiscount}
+                            onFocus={() => setCartEditField('discount')}
+                            onChange={(e) => setCartInputDiscount(e.target.value)}
+                            onKeyPress={(e) => { if (e.key === 'Enter') commitCartEdit() }}
+                            className={`w-full text-center text-white font-bold text-lg bg-yellow-950 p-2 border-2 rounded-none ${cartEditField === 'discount' ? 'border-yellow-400' : 'border-yellow-700'}`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Quick discount presets for this item only */}
+                      <div className="flex gap-1">
+                        {(cartDiscountType === 'price'
+                          ? [0, 10, 25, 50, 100]
+                          : [0, 5, 10, 15, 20]
+                        ).map((preset) => (
+                          <button
+                            key={`cart-disc-${cartDiscountType}-${preset}`}
+                            onClick={() => {
+                              setCartInputDiscount(preset.toString())
+                              setCartEditField('discount')
+                            }}
+                            className={`flex-1 h-8 text-xs font-bold border-2 rounded-none ${
+                              cartInputDiscount === preset.toString()
+                                ? 'bg-yellow-600 border-yellow-400 text-white'
+                                : 'bg-yellow-900 hover:bg-yellow-800 border-yellow-800 text-yellow-100'
+                            }`}
+                          >
+                            {preset === 0 ? 'None' : cartDiscountType === 'price' ? preset : `${preset}%`}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Live preview of this line's new total */}
+                      {(() => {
+                        const previewQty = parseFloat(cartInputQty) || 0
+                        const preview = resolveDiscount(item.originalPrice, previewQty, cartInputDiscount, cartDiscountType)
+                        return (
+                          <div className="flex justify-between text-xs font-bold text-gray-300">
+                            <span>
+                              LKR {preview.unitPrice.toFixed(2)} × {previewQty}
+                              {preview.amount > 0 && (
+                                <span className="text-yellow-400 ml-1">
+                                  (-{cartDiscountType === 'price'
+                                    ? `LKR ${preview.amount.toFixed(2)}`
+                                    : `${preview.percent.toFixed(1)}%`})
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-green-400">
+                              = LKR {(preview.unitPrice * previewQty).toFixed(2)}
+                            </span>
+                          </div>
+                        )
+                      })()}
+
+                      <div className="flex gap-1">
+                        <button
+                          onClick={commitCartEdit}
+                          className="flex-1 h-9 bg-green-700 hover:bg-green-800 text-white font-bold text-sm border-2 border-green-900 rounded-none"
+                        >
+                          APPLY
+                        </button>
+                        <button
+                          onClick={closeCartEdit}
+                          className="flex-1 h-9 bg-gray-700 hover:bg-gray-600 text-white font-bold text-sm border-2 border-gray-800 rounded-none"
+                        >
+                          CANCEL
+                        </button>
+                      </div>
+                      <div className="text-xs text-blue-300 font-bold text-center">Tap a field, then type or use the keypad • Enter to apply</div>
                     </div>
                   )}
                 </div>
@@ -1604,25 +1687,10 @@ export default function POSSystem() {
               <span>SUBTOTAL:</span>
               <span>LKR {subtotal.toFixed(2)}</span>
             </div>
-            {((discount && parseFloat(discount) > 0) || (discountByPrice && parseFloat(discountByPrice) > 0)) && (
+            {itemDiscountTotal > 0 && (
               <div className="flex justify-between text-yellow-400 font-bold text-sm">
-                <span>
-                  Item Discount (
-                  {itemDiscountType === 'percentage' 
-                    ? `${discount}%` 
-                    : `PKR ${discountByPrice}`
-                  }):
-                </span>
-                <span>-LKR {cart.reduce((sum, item) => {
-                  if (itemDiscountType === 'price' && discountByPrice) {
-                    // PKR mode: multiply PKR discount by quantity
-                    return sum + (parseFloat(discountByPrice) * item.quantity)
-                  } else {
-                    // Percentage mode: calculate from original price
-                    const itemDiscountPercent = parseFloat(item.discount) || 0
-                    return sum + ((item.originalPrice * itemDiscountPercent) / 100) * item.quantity
-                  }
-                }, 0).toFixed(2)}</span>
+                <span>Item Discounts:</span>
+                <span>-LKR {itemDiscountTotal.toFixed(2)}</span>
               </div>
             )}
             {billDiscountAmount > 0 && (
@@ -1655,7 +1723,12 @@ export default function POSSystem() {
                   setDiscountInputValue(prev => prev + key)
                 }
               } else if (selectedCartIndex !== null) {
-                setCartInputQty(prev => prev + key)
+                // Type into whichever cart field is active
+                if (cartEditField === 'discount') {
+                  setCartInputDiscount(prev => prev + key)
+                } else {
+                  setCartInputQty(prev => prev + key)
+                }
               } else {
                 setProductId(prev => prev + key)
                 setProductSearch(prev => prev + key)
@@ -1665,7 +1738,11 @@ export default function POSSystem() {
               if (discountMode) {
                 setDiscountInputValue(prev => prev.slice(0, -1))
               } else if (selectedCartIndex !== null) {
-                setCartInputQty(prev => prev.slice(0, -1))
+                if (cartEditField === 'discount') {
+                  setCartInputDiscount(prev => prev.slice(0, -1))
+                } else {
+                  setCartInputQty(prev => prev.slice(0, -1))
+                }
               } else {
                 setProductId(prev => prev.slice(0, -1))
                 setProductSearch(prev => prev.slice(0, -1))
@@ -1675,7 +1752,11 @@ export default function POSSystem() {
               if (discountMode) {
                 setDiscountInputValue('')
               } else if (selectedCartIndex !== null) {
-                setCartInputQty('')
+                if (cartEditField === 'discount') {
+                  setCartInputDiscount('')
+                } else {
+                  setCartInputQty('')
+                }
               } else {
                 setProductId('')
                 setProductSearch('')
@@ -1684,54 +1765,31 @@ export default function POSSystem() {
             onClearCart={clearCart}
             onAdd={() => {
               if (discountMode) {
-                // Apply discount
+                // Apply bill discount (item discounts are set per cart line)
                 const discountValue = parseFloat(discountInputValue) || 0
-                if (discountMode === 'item') {
-                  setDiscount(discountValue.toString())
-                  toast({
-                    title: "Item Discount Applied",
-                    description: `${discountValue}% discount set`,
-                    duration: 800
-                  })
-                } else if (discountMode === 'bill') {
-                  setBillDiscount(discountValue.toString())
-                  toast({
-                    title: "Bill Discount Applied",
-                    description: `${discountValue}% discount set`,
-                    duration: 800
-                  })
-                }
+                setBillDiscount(discountValue.toString())
+                toast({
+                  title: "Bill Discount Applied",
+                  description: `${discountValue}% discount set`,
+                  duration: 800
+                })
                 setDiscountMode(null)
                 setDiscountInputValue('')
               } else if (selectedCartIndex !== null) {
-                const newQty = parseFloat(cartInputQty) || 1
-                if (newQty > 0) {
-                  updateQuantity(selectedCartIndex, newQty)
-                  setSelectedCartIndex(null)
-                  setCartInputQty('')
-                }
+                commitCartEdit()
               } else {
                 addToCart()
               }
             }}
             onEnter={() => {
               if (discountMode) {
-                // Apply discount and close
+                // Apply bill discount and close
                 const discountValue = parseFloat(discountInputValue) || 0
-                if (discountMode === 'item') {
-                  setDiscount(discountValue.toString())
-                } else if (discountMode === 'bill') {
-                  setBillDiscount(discountValue.toString())
-                }
+                setBillDiscount(discountValue.toString())
                 setDiscountMode(null)
                 setDiscountInputValue('')
               } else if (selectedCartIndex !== null) {
-                const newQty = parseFloat(cartInputQty) || 1
-                if (newQty > 0) {
-                  updateQuantity(selectedCartIndex, newQty)
-                  setSelectedCartIndex(null)
-                  setCartInputQty('')
-                }
+                commitCartEdit()
               } else if (cart.length > 0) {
                 initiatePayment()
               }
@@ -1742,13 +1800,13 @@ export default function POSSystem() {
           <div className="bg-black border-t-2 border-gray-700 p-2">
             {selectedCartIndex !== null ? (
               <div className="text-center space-y-1 py-1">
-                <div className="text-yellow-400 font-bold text-base">EDIT QUANTITY MODE</div>
-                <div className="text-xs text-yellow-300">Use keyboard to type • Press ADD or ENT to apply</div>
+                <div className="text-yellow-400 font-bold text-base">EDIT ITEM MODE ({cartEditField === 'discount' ? 'DISCOUNT %' : 'QTY'})</div>
+                <div className="text-xs text-yellow-300">Tap a field to switch • Press ADD or ENT to apply</div>
               </div>
             ) : cart.length > 0 ? (
               <div className="text-center space-y-1 py-1">
                 <div className="text-green-400 font-bold text-base">READY TO PAY</div>
-                <div className="text-xs text-green-300">Click item to edit qty • Press ENT to complete</div>
+                <div className="text-xs text-green-300">Click item to edit qty & discount • Press ENT to complete</div>
               </div>
             ) : (
               <div className="text-center text-gray-500 font-bold text-sm">
@@ -1775,17 +1833,19 @@ export default function POSSystem() {
         saleId={saleId}
         paymentDetails={paymentDetails}
         billDiscount={billDiscountPercent}
+        billDiscountType={billDiscountType}
         onPrint={printBill}
         onNewSale={handleNewSale}
       />
 
       {/* Hidden Thermal Receipt for Printing */}
       <div style={{ position: 'absolute', left: '-9999px', top: 0 }}>
-        <ThermalReceipt 
-          cart={cart} 
-          saleId={saleId} 
-          paymentDetails={paymentDetails} 
+        <ThermalReceipt
+          cart={cart}
+          saleId={saleId}
+          paymentDetails={paymentDetails}
           billDiscount={billDiscountPercent}
+          billDiscountType={billDiscountType}
         />
       </div>
 
@@ -1843,8 +1903,7 @@ export default function POSSystem() {
         onClose={() => {
           setShowStockWarning(false)
           setStockWarningData(null)
-          setSelectedCartIndex(null)
-          setCartInputQty('')
+          closeCartEdit()
         }}
         onConfirm={handleStockWarningConfirm}
         productName={stockWarningData?.productName}

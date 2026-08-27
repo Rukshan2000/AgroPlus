@@ -6,6 +6,17 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 
+// Renders a per-item discount the same way the cashier entered it:
+// a flat LKR amount off the line total, or a percentage off the unit price.
+function formatItemDiscount(item) {
+  if (!item.discount || item.discount <= 0) return ''
+  if (item.discountType === 'price') {
+    const amount = (Number(item.originalPrice) - Number(item.unitPrice)) * Number(item.quantity)
+    return ` (-LKR ${amount.toFixed(2)})`
+  }
+  return ` (-${Number(item.discount).toFixed(1)}%)`
+}
+
 export default function Receipt({
   isOpen,
   onClose,
@@ -14,11 +25,17 @@ export default function Receipt({
   onNewSale,
   saleId,
   paymentDetails,
-  billDiscount = 0
+  billDiscount = 0,
+  billDiscountType = 'percentage'
 }) {
   const subtotal = cart.reduce((sum, item) => sum + Number(item.total), 0)
+  // `billDiscount` is always the percentage equivalent, so the amount is correct
+  // for both modes; only the label changes.
   const billDiscountAmount = (subtotal * billDiscount) / 100
   const total = subtotal - billDiscountAmount
+  const billDiscountLabel = billDiscountType === 'price'
+    ? `Bill Discount (LKR ${billDiscountAmount.toFixed(2)})`
+    : `Bill Discount (${Number(billDiscount).toFixed(1)}%)`
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -45,7 +62,7 @@ export default function Receipt({
                 <div className="font-semibold text-gray-900 dark:text-gray-100">{item.name}</div>
                 <div className="text-gray-600 dark:text-gray-400">
                   {item.quantity} x LKR {Number(item.unitPrice).toFixed(2)}
-                  {item.discount > 0 && ` (-${item.discount}%)`}
+                  {formatItemDiscount(item)}
                 </div>
               </div>
               <div className="font-bold text-gray-900 dark:text-gray-100">LKR {Number(item.total).toFixed(2)}</div>
@@ -64,7 +81,7 @@ export default function Receipt({
             </div>
             {billDiscount > 0 && (
               <div className="flex justify-between text-orange-600 dark:text-orange-400">
-                <span>Bill Discount ({billDiscount}%):</span>
+                <span>{billDiscountLabel}:</span>
                 <span>-LKR {billDiscountAmount.toFixed(2)}</span>
               </div>
             )}

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
-import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3, Clock, DollarSign, ChevronDown, ChevronRight, Star, Gift, Undo2, Truck, MapPin, Activity, PlusCircle } from "lucide-react"
+import { Home, Settings, Users, UserCircle2, LogOut, LayoutDashboard, Package, Tag, ShoppingCart, BarChart3, Clock, DollarSign, ChevronDown, ChevronRight, Star, Gift, Undo2, Truck, MapPin, Activity, PlusCircle, FileText } from "lucide-react"
 
 import {
   Sidebar as UiSidebar,
@@ -134,6 +134,7 @@ function NavMenu({ role }) {
         { id: "pos", href: "/pos", label: "POS System", icon: ShoppingCart, roles: ["admin", "manager", "user", "cashier"] },
         { id: "sales", href: "/sales", label: "Sales History", icon: BarChart3, roles: ["admin", "manager", "user"] },
         { id: "returns", href: "/returns", label: "Returns", icon: Undo2, roles: ["admin", "manager", "user", "cashier"] },
+        { id: "fake-bill", href: "/fake-bill", label: "Fake Bill Generator", icon: FileText, roles: ["admin", "manager", "user", "cashier"] },
       ]
     },
     {
@@ -205,7 +206,7 @@ function NavMenu({ role }) {
   const allowedMenuIds = allowedMenusEnv.split(',').map(id => id.trim())
 
   // Get allowed sidebar items from environment
-  const allowedItemsEnv = process.env.NEXT_PUBLIC_ALLOWED_SIDEBAR_ITEMS || "dashboard,analytics,pos,sales,returns,quick-add,products,categories,distribute,suppliers,purchase-orders,customers,loyalty-settings,rewards,outlets,hr-dashboard,payroll,users,settings"
+  const allowedItemsEnv = process.env.NEXT_PUBLIC_ALLOWED_SIDEBAR_ITEMS || "dashboard,analytics,pos,sales,returns,fake-bill,quick-add,products,categories,distribute,suppliers,purchase-orders,customers,loyalty-settings,rewards,outlets,hr-dashboard,payroll,users,settings"
   const allowedItemIds = allowedItemsEnv.split(',').map(id => id.trim())
 
   return (
