@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS categories (
   description TEXT,
   color VARCHAR(7), -- For hex color codes like #FF5733
   is_active BOOLEAN NOT NULL DEFAULT true,
-  created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NOW()
 );
